@@ -34,6 +34,7 @@ from typing import Any
 
 SERVICES = ("frontend", "api-gateway", "user-service", "order-service", "payment-service")
 MAX_BASELINE_ERROR_RATE = 0.005
+TRACE_SETTLE_S = 30
 
 LOADGEN = os.environ.get("TESTBED_LOADGEN_URL", "http://127.0.0.1:8089")
 PROM = os.environ.get("TESTBED_PROMETHEUS_URL", "http://127.0.0.1:9090")
@@ -161,6 +162,11 @@ def baseline_verdict(
     return (not reasons, reasons)
 
 
+def trace_services(trace: dict[str, Any]) -> list[str]:
+    procs = trace.get("processes", {})
+    return sorted({procs[sp["processID"]]["serviceName"] for sp in trace.get("spans", [])})
+
+
 def last_json_line(output: str) -> dict[str, Any]:
     for line in reversed(output.strip().splitlines()):
         line = line.strip()
@@ -246,27 +252,37 @@ def run_baseline(ev: Evidence, minutes: int, warmup_s: int) -> dict[str, Any]:
         )
     }
     jaeger_services = set(jaeger(ev, "/api/services").get("data") or [])
+    # Only traces that ended >= TRACE_SETTLE_S ago: each service exports its spans in batches,
+    # so the newest traces are still being assembled (seen live: 2 of 5 had only frontend spans
+    # at query time and all 20 spans a minute later).
+    now_us = int(time.time() * 1e6)
     traces = (
         jaeger(
             ev,
             "/api/traces",
-            {"service": "frontend", "operation": "POST /checkout", "limit": 5, "lookback": "1h"},
+            {
+                "service": "frontend",
+                "operation": "POST /checkout",
+                "limit": 5,
+                "start": now_us - int(seconds * 1e6),
+                "end": now_us - TRACE_SETTLE_S * 1_000_000,
+            },
         ).get("data")
         or []
     )
-    chain = (
-        sorted(
-            {traces[0]["processes"][sp["processID"]]["serviceName"] for sp in traces[0]["spans"]}
-        )
-        if traces
-        else []
-    )
+    per_trace = [trace_services(tr) for tr in traces]
+    complete = [svcs for svcs in per_trace if set(svcs) == set(SERVICES)]
+    chain = sorted(set().union(*per_trace)) if per_trace else []
     loki_services = set(loki_label_values(ev, "service_name"))
     presence = {"prometheus": prom_services, "jaeger": jaeger_services, "loki": loki_services}
     passed, reasons = baseline_verdict(delta, presence)
-    if traces and set(chain) != set(SERVICES):
+    if traces and len(complete) != len(traces):
         passed = False
-        reasons.append(f"checkout trace spans {chain}, not all five services")
+        partial = [svcs for svcs in per_trace if set(svcs) != set(SERVICES)]
+        reasons.append(
+            f"{len(partial)} of {len(traces)} settled checkout traces do not span all five "
+            f"services: {partial}"
+        )
     if not traces:
         passed = False
         reasons.append("no checkout trace found in Jaeger")
@@ -277,6 +293,7 @@ def run_baseline(ev: Evidence, minutes: int, warmup_s: int) -> dict[str, Any]:
         "prometheus": prom,
         "presence": {k: sorted(v) for k, v in presence.items()},
         "checkout_trace_services": chain,
+        "checkout_traces_complete": f"{len(complete)}/{len(traces)}",
         "seed": after.get("seed"),
         "mix": after.get("mix"),
         "passed": passed,

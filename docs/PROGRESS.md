@@ -100,7 +100,7 @@ have not started.
 | T2 Services | done |
 | T3 Telemetry + Collector | done |
 | T4 Backends | done |
-| T5 Loadgen + deploy emitter | code committed — **unit-tested only; live baseline and deploy round-trip NOT yet verified** (laptop cannot run the testbed; to be verified in Codespaces/CI, ADR 0004) |
+| T5 Loadgen + deploy emitter | done — **verified live in Codespace (2026-11-17)**: baseline run `20261117T184537Z-c99f0a` PASS (10 min, 5958 requests, 9.93 req/s, 0 errors = 0.000%, 5/5 settled checkout traces span all five services, all 5 services in Prometheus/Jaeger/Loki); deploy-check run `20261117T154229Z-719b99` PASS (payment-service 1.2.0→1.2.1 in 3.1 s, version label in Prometheus, both deploy events in Loki, rollback ok). First baseline (`20261117T153044Z-ec58e2`) failed: Jaeger was queried before the newest traces were fully exported; fixed by only reading traces that ended ≥ 30 s ago |
 | T6 Controller + ground truth | |
 | T7 S1 pool exhaustion | |
 | T8 S2–S5 | |

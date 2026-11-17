@@ -161,3 +161,14 @@ def test_render_deploy_summary() -> None:
 def test_cli_refuses_unavailable_or_invalid_checks(argv: list[str], tmp_path: Path) -> None:
     assert main([*argv, "--out", str(tmp_path)]) == 2
     assert not any(tmp_path.iterdir())  # nothing ran, nothing written
+
+
+def test_trace_services_lists_every_service_in_a_trace() -> None:
+    from harness.live import trace_services
+
+    trace = {
+        "processes": {"p1": {"serviceName": "frontend"}, "p2": {"serviceName": "order-service"}},
+        "spans": [{"processID": "p2"}, {"processID": "p1"}, {"processID": "p2"}],
+    }
+    assert trace_services(trace) == ["frontend", "order-service"]
+    assert trace_services({}) == []
