@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Annotated
@@ -20,6 +21,8 @@ from shop.user_service.db import users
 from shop.user_service.security import new_session_token, verify_password
 
 SESSION_TTL_S = 3600
+
+logger = logging.getLogger("shop.users")
 
 
 class LoginIn(BaseModel):
@@ -65,6 +68,7 @@ def create_app() -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         db = Database(settings)
+        db.instrument(app.state.telemetry)
         await db.check()  # a misconfigured database fails the start, as it should
         app.state.db = db
         app.state.redis = Redis.from_url(redis_url, socket_connect_timeout=2, socket_timeout=2)
@@ -85,12 +89,14 @@ def create_app() -> FastAPI:
                 )
             ).first()
         if row is None or not verify_password(body.password, row.password_hash):
+            logger.warning("sign-in failed: invalid credentials")
             raise UnauthorizedError("Invalid email or password.")
         token = new_session_token()
         try:
             await redis.set(f"session:{token}", row.id, ex=SESSION_TTL_S)
         except RedisError as exc:
             raise ServiceUnavailableError("Session store unavailable.") from exc
+        logger.info("user signed in", extra={"user.id": row.id})
         return SessionOut(token=token, user_id=row.id)
 
     @app.get("/sessions/{token}", response_model=SessionUser)

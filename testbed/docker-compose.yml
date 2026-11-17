@@ -68,7 +68,9 @@ services:
     command: ["-host=0.0.0.0", "-config=/config/toxiproxy.json"]
     volumes:
       - ./infra/toxiproxy/toxiproxy.json:/config/toxiproxy.json:ro
-    networks: [shop]
+    networks:
+      shop:
+        aliases: [payments-lb]
     mem_limit: 48m
     memswap_limit: 48m
     healthcheck:
@@ -76,6 +78,29 @@ services:
       interval: 10s
       timeout: 5s
       retries: 6
+
+  otel-collector:
+    build:
+      context: ./infra/otel
+    image: sentinelai-testbed-otelcol:dev
+    restart: unless-stopped
+    command: ["--config=/etc/otelcol/collector.yaml"]
+    environment:
+      GOMEMLIMIT: 160MiB
+      COLLECTOR_DEBUG_VERBOSITY: ${COLLECTOR_DEBUG_VERBOSITY:-basic}
+    volumes:
+      - ./infra/otel/collector.yaml:/etc/otelcol/collector.yaml:ro
+    ports:
+      - "127.0.0.1:4318:4318"
+    networks: [shop]
+    mem_limit: 192m
+    memswap_limit: 192m
+    healthcheck:
+      test: ["CMD", "/bin/busybox", "wget", "-qO-", "http://127.0.0.1:13133/"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
 
   seed:
     # One-shot: creates schemas and loads deterministic seed data; no-op if already seeded.
@@ -105,10 +130,13 @@ services:
       SERVICE_VERSION: "1.2.0"
       SEED: ${SEED:-42}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
       DATABASE_URL: postgresql+asyncpg://payments_svc:${PAYMENTS_DB_PASSWORD}@postgres:5432/payments
     mem_limit: 160m
     memswap_limit: 160m
     depends_on:
+      otel-collector:
+        condition: service_healthy
       seed:
         condition: service_completed_successfully
       postgres:
@@ -120,15 +148,18 @@ services:
     environment:
       SERVICE_VERSION: "1.7.2"
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
       DATABASE_URL: postgresql+asyncpg://orders_svc:${ORDERS_DB_PASSWORD}@postgres:5432/orders
-      # Through toxiproxy, so the link can be faulted like a real network path.
-      PAYMENT_SERVICE_URL: http://toxiproxy:18000
+      # Through the payments load balancer (a TCP proxy on the network path).
+      PAYMENT_SERVICE_URL: http://payments-lb:8000
       DB_POOL_SIZE: "10"
       DB_MAX_OVERFLOW: "0"
       DB_POOL_TIMEOUT_S: "3"
     mem_limit: 160m
     memswap_limit: 160m
     depends_on:
+      otel-collector:
+        condition: service_healthy
       seed:
         condition: service_completed_successfully
       postgres:
@@ -144,11 +175,14 @@ services:
     environment:
       SERVICE_VERSION: "2.3.0"
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
       DATABASE_URL: postgresql+asyncpg://users_svc:${USERS_DB_PASSWORD}@postgres:5432/users
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
     mem_limit: 160m
     memswap_limit: 160m
     depends_on:
+      otel-collector:
+        condition: service_healthy
       seed:
         condition: service_completed_successfully
       postgres:
@@ -162,12 +196,15 @@ services:
     environment:
       SERVICE_VERSION: "3.1.0"
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
       USER_SERVICE_URL: http://user-service:8000
       ORDER_SERVICE_URL: http://order-service:8000
     # Scenario 5 (bounded memory leak) relies on this limit being reachable.
     mem_limit: 192m
     memswap_limit: 192m
     depends_on:
+      otel-collector:
+        condition: service_healthy
       user-service:
         condition: service_healthy
       order-service:
@@ -179,12 +216,15 @@ services:
     environment:
       SERVICE_VERSION: "1.0.0"
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
       GATEWAY_URL: http://api-gateway:8000
     ports:
       - "127.0.0.1:8081:8000"
     mem_limit: 128m
     memswap_limit: 128m
     depends_on:
+      otel-collector:
+        condition: service_healthy
       api-gateway:
         condition: service_healthy
 

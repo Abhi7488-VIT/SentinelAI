@@ -1,4 +1,4 @@
-"""JSON logging to stdout. T3 adds trace correlation and OTLP export of the same records."""
+"""Logging: JSON lines on stdout (with trace correlation) plus OTLP export of the same records."""
 
 from __future__ import annotations
 
@@ -8,6 +8,8 @@ import sys
 import traceback
 from datetime import UTC, datetime
 from typing import Any
+
+from opentelemetry import trace
 
 from shop.common.settings import ServiceSettings
 
@@ -31,19 +33,25 @@ class JsonFormatter(logging.Formatter):
             "logger": record.name,
             "msg": record.getMessage(),
         }
+        ctx = trace.get_current_span().get_span_context()
+        if ctx.is_valid:
+            payload["trace_id"] = format(ctx.trace_id, "032x")
+            payload["span_id"] = format(ctx.span_id, "016x")
         for key, value in vars(record).items():
-            if key not in _RESERVED and not key.startswith("_"):
+            if key not in _RESERVED and not key.startswith(("_", "otel")):
                 payload[key] = value
         if record.exc_info:
             payload["exception"] = "".join(traceback.format_exception(*record.exc_info))
         return json.dumps(payload, default=str)
 
 
-def configure_logging(settings: ServiceSettings) -> None:
-    handler = logging.StreamHandler(sys.stdout)
-    handler.setFormatter(JsonFormatter(settings.service_name))
+def configure_logging(
+    settings: ServiceSettings, extra_handler: logging.Handler | None = None
+) -> None:
+    stdout = logging.StreamHandler(sys.stdout)
+    stdout.setFormatter(JsonFormatter(settings.service_name))
     root = logging.getLogger()
-    root.handlers = [handler]
+    root.handlers = [stdout] + ([extra_handler] if extra_handler is not None else [])
     root.setLevel(settings.log_level)
     for name in ("uvicorn", "uvicorn.error"):
         logging.getLogger(name).handlers = []
@@ -51,3 +59,8 @@ def configure_logging(settings: ServiceSettings) -> None:
     logging.getLogger("uvicorn.access").disabled = True
     # One line per outgoing request is noise; traces carry the client calls.
     logging.getLogger("httpx").setLevel(logging.WARNING)
+    # Never feed the exporter's own warnings back into the exporter.
+    otel = logging.getLogger("opentelemetry")
+    otel.propagate = False
+    otel.handlers = [stdout]
+    otel.setLevel(logging.WARNING)

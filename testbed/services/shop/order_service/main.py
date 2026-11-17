@@ -93,6 +93,7 @@ def create_app() -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         db = Database(settings)
+        db.instrument(app.state.telemetry)
         await db.check()
         app.state.db = db
         app.state.payments = Downstream("payment-service", payment_url, settings.http_timeout_s)
@@ -101,6 +102,9 @@ def create_app() -> FastAPI:
         await db.close()
 
     app = create_service_app(settings, lifespan)
+    orders_counter = app.state.telemetry.meter().create_counter(
+        "shop.orders", unit="{order}", description="Orders by final status."
+    )
 
     @app.get("/products", response_model=list[Product])
     async def list_products(
@@ -177,8 +181,19 @@ def create_app() -> FastAPI:
         except ShopError:
             status = "failed"
             await _set_status(db, order_id, status)
+            logger.warning(
+                "order failed: payment could not be authorized",
+                extra={"order.id": order_id, "order.status": status},
+            )
+            orders_counter.add(1, {"order.status": status})
             raise
         await _set_status(db, order_id, status)
+        orders_counter.add(1, {"order.status": status})
+        logger.info(
+            "order %s",
+            "placed" if status == "paid" else status,
+            extra={"order.id": order_id, "order.status": status, "order.total_cents": total},
+        )
         if status == "declined":
             raise PaymentDeclinedError(
                 f"Payment declined ({payment.get('decline_code') or 'unknown'})."

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Annotated, Literal
@@ -16,6 +17,8 @@ from shop.common.db import Database
 from shop.common.settings import ServiceSettings
 from shop.payment_service import issuer
 from shop.payment_service.db import payments
+
+logger = logging.getLogger("shop.payments")
 
 
 class AuthorizeRequest(BaseModel):
@@ -54,18 +57,32 @@ def create_app() -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         db = Database(settings)
+        db.instrument(app.state.telemetry)
         await db.check()
         app.state.db = db
         yield
         await db.close()
 
     app = create_service_app(settings, lifespan)
+    payments_counter = app.state.telemetry.meter().create_counter(
+        "shop.payments", unit="{payment}", description="Authorizations by outcome."
+    )
 
     @app.post("/payments/authorize", response_model=PaymentOut)
     async def authorize(body: AuthorizeRequest, db: DbDep) -> PaymentOut:
         """Idempotent per order: a retry returns the original decision."""
         decision = await issuer.authorize(settings.seed, body.order_id)
         status = "approved" if decision.approved else "declined"
+        payments_counter.add(1, {"payment.status": status})
+        logger.info(
+            "payment %s",
+            status,
+            extra={
+                "order.id": body.order_id,
+                "payment.status": status,
+                "payment.decline_code": decision.decline_code or "",
+            },
+        )
         async with db.connection() as conn:
             stmt = (
                 insert(payments)

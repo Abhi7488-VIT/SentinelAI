@@ -1,0 +1,49 @@
+# OpenTelemetry Collector for the testbed.
+# Receives OTLP from the shop services and fans out to the backends (added in T4).
+# The SentinelAI exporter lives in collector.sentinelai.yaml and is only loaded when
+# SENTINELAI_OTLP_ENDPOINT is set (Phase 3).
+
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+
+receivers:
+  otlp:
+    protocols:
+      http:
+        endpoint: 0.0.0.0:4318
+      grpc:
+        endpoint: 0.0.0.0:4317
+
+processors:
+  # First in every pipeline: refuse data rather than be OOM-killed (container limit 192 MiB).
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 150
+    spike_limit_mib: 30
+  batch:
+    timeout: 2s
+    send_batch_size: 1024
+
+exporters:
+  debug:
+    verbosity: ${env:COLLECTOR_DEBUG_VERBOSITY:-basic}
+
+service:
+  extensions: [health_check]
+  telemetry:
+    logs:
+      level: info
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [debug]
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [debug]
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [debug]
