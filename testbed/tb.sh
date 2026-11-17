@@ -118,6 +118,7 @@ cmd_test() {
 main() {
   local cmd="${1:-}"; shift || true
   case "$cmd" in
+    env) ensure_env; log "testbed/.env ready (placeholders left: $(grep -c change-me "$TB_DIR/.env" || true))" ;;
     up) cmd_up ;;
     ui) cmd_ui ;;
     down) cmd_down "$@" ;;

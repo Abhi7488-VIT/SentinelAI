@@ -38,7 +38,7 @@ Read at the start of every session. Updated at the end of each phase.
 | T6 Controller + ground truth | |
 | T7 S1 pool exhaustion | |
 | T8 S2–S5 | |
-| T9 Reproducibility + CI | |
+| T9 Reproducibility + CI | partial: `testbed-live.yml` (manual live checks) and CI testbed + actionlint jobs added early (ADR 0004); scenario suite and reproducibility still to do |
 | T10 Docs + report | |
 
 ## Phase 1 summary
