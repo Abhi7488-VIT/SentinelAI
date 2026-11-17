@@ -33,6 +33,11 @@ gh codespace ssh -c NAME               # terminal in the codespace
 
 (`standardLinux32gb` is the 4-core / 16 GB machine; the `32gb` is its disk.)
 
+`gh codespace ssh` needs an SSH server in the container. The devcontainer installs one with the
+`ghcr.io/devcontainers/features/sshd:1` feature (`"version": "latest"`). A Codespace created before
+that feature was added (before 2026-11-17) has no SSH server: use the browser terminal, or rebuild
+it when convenient (Command Palette -> "Codespaces: Rebuild Container").
+
 Check the tools in the Codespace terminal:
 
 ```bash
@@ -156,6 +161,14 @@ Fixed in `.devcontainer/devcontainer.json` by doing both:
 
 `testbed/tests/unit/test_devcontainer.py` fails if either is undone. As with the previous entry,
 delete the broken Codespace (or run a full rebuild) after pulling the fix.
+
+### `gh codespace ssh` fails (no SSH server in the container)
+
+Codespaces created before the `sshd` feature was added to `.devcontainer/devcontainer.json` have no
+SSH server, so `gh codespace ssh` cannot connect. Fixed by the feature
+`"ghcr.io/devcontainers/features/sshd:1": {"version": "latest"}`; it takes effect only after the
+container is rebuilt (or the Codespace is recreated). `testbed/tests/unit/test_devcontainer.py`
+fails if the feature is removed.
 
 ### post-create finished with "SKIPPED" steps
 

@@ -38,6 +38,8 @@ def test_tooling_features() -> None:
     assert features["ghcr.io/devcontainers/features/node:1"] == {"version": "lts"}
     # Docker CE from Docker's own repo, not moby packages from the distribution.
     assert features["ghcr.io/devcontainers/features/docker-in-docker:2"] == {"moby": False}
+    # sshd so `gh codespace ssh` works (the base image has no SSH server).
+    assert features["ghcr.io/devcontainers/features/sshd:1"] == {"version": "latest"}
 
 
 def test_ports_forwarded_with_labels() -> None:
