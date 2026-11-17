@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}Your account{% endblock %}
+{% block content %}
+<h1>{{ user.name }}</h1>
+<h2>Recent orders</h2>
+<ul>
+{% for o in orders %}<li>#{{ o.id }} — {{ o.status }} — {{ "%.2f"|format(o.total_cents / 100) }}</li>
+{% else %}<li>No orders yet.</li>
+{% endfor %}</ul>
+{% endblock %}

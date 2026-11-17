@@ -31,7 +31,7 @@ Read at the start of every session. Updated at the end of each phase.
 | Task | Status |
 |---|---|
 | T1 Skeleton (uv project, compose, limits, Makefile + tb.sh) | done |
-| T2 Services | |
+| T2 Services | done |
 | T3 Telemetry + Collector | |
 | T4 Backends | |
 | T5 Loadgen + deploy emitter | |

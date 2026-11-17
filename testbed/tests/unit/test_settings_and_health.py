@@ -49,6 +49,17 @@ def test_secrets_are_masked(monkeypatch: pytest.MonkeyPatch) -> None:
 @pytest.mark.parametrize(("service", "module"), sorted(MODULES.items()))
 async def test_healthz(service: str, module: str, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("SERVICE_VERSION", "1.2.3")
+    # Construction validates required dependencies; the ASGI test transport does not run the
+    # lifespan, so nothing connects to these.
+    for var, value in {
+        "GATEWAY_URL": "http://gw",
+        "USER_SERVICE_URL": "http://users",
+        "ORDER_SERVICE_URL": "http://orders",
+        "PAYMENT_SERVICE_URL": "http://payments",
+        "REDIS_URL": "redis://redis:6379/0",
+        "DATABASE_URL": "postgresql+asyncpg://u:p@db/x",
+    }.items():
+        monkeypatch.setenv(var, value)
     create_app: Callable[[], FastAPI] = importlib.import_module(module).create_app
     transport = httpx.ASGITransport(app=create_app())
     async with httpx.AsyncClient(transport=transport, base_url="http://t") as client:

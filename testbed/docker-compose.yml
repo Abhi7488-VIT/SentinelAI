@@ -77,16 +77,40 @@ services:
       timeout: 5s
       retries: 6
 
+  seed:
+    # One-shot: creates schemas and loads deterministic seed data; no-op if already seeded.
+    build:
+      context: .
+      target: services
+    image: sentinelai-testbed-shop:dev
+    command: ["python", "-m", "shop.seed"]
+    restart: "no"
+    environment:
+      SEED: ${SEED:-42}
+      ORDERS: ${SEED_ORDERS:-500000}
+      USERS_DATABASE_URL: postgresql+asyncpg://users_svc:${USERS_DB_PASSWORD}@postgres:5432/users
+      ORDERS_DATABASE_URL: postgresql+asyncpg://orders_svc:${ORDERS_DB_PASSWORD}@postgres:5432/orders
+      PAYMENTS_DATABASE_URL: postgresql+asyncpg://payments_svc:${PAYMENTS_DB_PASSWORD}@postgres:5432/payments
+    networks: [shop]
+    mem_limit: 192m
+    memswap_limit: 192m
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   payment-service:
     <<: *shop-service
     command: ["uvicorn", "shop.payment_service.main:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000", "--no-server-header", "--no-access-log"]
     environment:
       SERVICE_VERSION: "1.2.0"
+      SEED: ${SEED:-42}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       DATABASE_URL: postgresql+asyncpg://payments_svc:${PAYMENTS_DB_PASSWORD}@postgres:5432/payments
     mem_limit: 160m
     memswap_limit: 160m
     depends_on:
+      seed:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
 
@@ -99,9 +123,14 @@ services:
       DATABASE_URL: postgresql+asyncpg://orders_svc:${ORDERS_DB_PASSWORD}@postgres:5432/orders
       # Through toxiproxy, so the link can be faulted like a real network path.
       PAYMENT_SERVICE_URL: http://toxiproxy:18000
+      DB_POOL_SIZE: "10"
+      DB_MAX_OVERFLOW: "0"
+      DB_POOL_TIMEOUT_S: "3"
     mem_limit: 160m
     memswap_limit: 160m
     depends_on:
+      seed:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       toxiproxy:
@@ -120,6 +149,8 @@ services:
     mem_limit: 160m
     memswap_limit: 160m
     depends_on:
+      seed:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       redis:
