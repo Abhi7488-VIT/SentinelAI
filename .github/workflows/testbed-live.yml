@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       scenario_id:
-        description: "Check to run: baseline | deploy-check | 1-5 (scenarios, once implemented)"
+        description: "Check to run: baseline | deploy-check | a scenario id (testbed/scenarios/*.json)"
         required: true
         default: baseline
         type: string
@@ -41,12 +41,11 @@ jobs:
         run: |
           case "$SCENARIO_ID" in
             baseline|deploy-check) ;;
-            1|2|3|4|5)
-              echo "::error::Scenario $SCENARIO_ID is not implemented yet (Phase 2 T6-T8)."
-              exit 1 ;;
             *)
-              echo "::error::Unknown scenario_id '$SCENARIO_ID' (use baseline, deploy-check or 1-5)."
-              exit 1 ;;
+              if [[ ! "$SCENARIO_ID" =~ ^[a-z0-9-]+$ || ! -f "testbed/scenarios/$SCENARIO_ID.json" ]]; then
+                echo "::error::Unknown scenario_id '$SCENARIO_ID' (use baseline, deploy-check or one of: $(find testbed/scenarios -maxdepth 1 -name '*.json' -printf '%f ' | sed 's/\.json//g'))."
+                exit 1
+              fi ;;
           esac
           if ! [[ "$DURATION_MINUTES" =~ ^[0-9]+$ ]] || (( DURATION_MINUTES < 1 || DURATION_MINUTES > 30 )); then
             echo "::error::duration_minutes must be a whole number from 1 to 30."
@@ -80,8 +79,16 @@ jobs:
       - name: Run the check (under the memory watchdog)
         working-directory: testbed
         run: |
-          python3 -m harness.memguard watch --on-breach "make -C .. testbed-down" -- \
-            python3 -m harness.live "$SCENARIO_ID" --minutes "$DURATION_MINUTES" --out runs
+          case "$SCENARIO_ID" in
+            baseline|deploy-check)
+              python3 -m harness.memguard watch --on-breach "make -C .. testbed-down" -- \
+                python3 -m harness.live "$SCENARIO_ID" --minutes "$DURATION_MINUTES" --out runs ;;
+            *)
+              # Scenario runs have their own memory guard inside the controller (it removes the
+              # fault and aborts below its MemAvailable floor); windows are the defaults.
+              sleep 60
+              make -C .. scenario-run ID="$SCENARIO_ID" ;;
+          esac
 
       - name: Collect diagnostics
         if: always()
@@ -110,8 +117,15 @@ jobs:
         if: always()
         run: |
           summary="testbed/runs/${SCENARIO_ID}/latest-summary.md"
+          record="testbed/runs/${SCENARIO_ID}/latest.json"
           if [[ -f "$summary" ]]; then
             cat "$summary" >> "$GITHUB_STEP_SUMMARY"
+          elif [[ -f "$record" ]]; then
+            {
+              echo "### Scenario \`${SCENARIO_ID}\`: **$(jq -r .run.status "$record")**"
+              echo
+              jq -r '.run.reasons[] | "- " + .' "$record"
+            } >> "$GITHUB_STEP_SUMMARY"
           else
             {
               echo "### Testbed live check \`${SCENARIO_ID}\`: no result"

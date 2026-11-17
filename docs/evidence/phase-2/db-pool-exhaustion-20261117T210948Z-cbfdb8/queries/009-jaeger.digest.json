@@ -1,0 +1,672 @@
+{
+ "backend": "jaeger",
+ "query": {
+  "service": "order-service",
+  "tags": {
+   "http.response.status_code": "503"
+  }
+ },
+ "params": {
+  "service": "order-service",
+  "start": "1794949908150659",
+  "end": "1794950208172512",
+  "limit": "50",
+  "tags": "{\"http.response.status_code\": \"503\"}"
+ },
+ "raw_sha256": "0def4c3a02edb2573efa206b94bc9cc4a7f60406c7c1852e7bcd7ac485db394e",
+ "raw_bytes": 1257986,
+ "traces": [
+  {
+   "traceID": "f63fe5ba3751402c72482d92f3f11e5a",
+   "spans": 2,
+   "service_spans": 2,
+   "service_status_codes": [
+    "503"
+   ],
+   "service_error_types": [
+    "503"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794950200422591
+  },
+  {
+   "traceID": "8f7941301028d2e7a471c232090b910c",
+   "spans": 2,
+   "service_spans": 2,
+   "service_status_codes": [
+    "503"
+   ],
+   "service_error_types": [
+    "503"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794950203671865
+  },
+  {
+   "traceID": "2b80c76cb06d2e931908a4d4213add35",
+   "spans": 2,
+   "service_spans": 2,
+   "service_status_codes": [
+    "503"
+   ],
+   "service_error_types": [
+    "503"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794950203424073
+  },
+  {
+   "traceID": "486d6e6680424c6b14819f10038f39cc",
+   "spans": 2,
+   "service_spans": 2,
+   "service_status_codes": [
+    "503"
+   ],
+   "service_error_types": [
+    "503"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794950203432321
+  },
+  {
+   "traceID": "0c0ab3381c61ab3ae731b8c0174af519",
+   "spans": 2,
+   "service_spans": 2,
+   "service_status_codes": [
+    "503"
+   ],
+   "service_error_types": [
+    "503"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794950203820000
+  },
+  {
+   "traceID": "23e0d951235da0d7a7b7888f8abcb164",
+   "spans": 2,
+   "service_spans": 2,
+   "service_status_codes": [
+    "503"
+   ],
+   "service_error_types": [
+    "503"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794950202921651
+  },
+  {
+   "traceID": "b4b25e42394f91d81b2ab74500b85e52",
+   "spans": 2,
+   "service_spans": 2,
+   "service_status_codes": [
+    "503"
+   ],
+   "service_error_types": [
+    "503"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794950203403148
+  },
+  {
+   "traceID": "41dd49f76d070d1d7e661f0eceb14e7f",
+   "spans": 2,
+   "service_spans": 2,
+   "service_status_codes": [
+    "503"
+   ],
+   "service_error_types": [
+    "503"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794950203170580
+  },
+  {
+   "traceID": "e78c6ca16006c412de3d5e67b4586e67",
+   "spans": 5,
+   "service_spans": 2,
+   "service_status_codes": [
+    "503"
+   ],
+   "service_error_types": [
+    "503"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794950203492461
+  },
+  {
+   "traceID": "d8f77f62ff4ec1e3a2bd051debec75e2",
+   "spans": 7,
+   "service_spans": 2,
+   "service_status_codes": [
+    "503"
+   ],
+   "service_error_types": [
+    "503"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794950200721479
+  },
+  {
+   "traceID": "c71808da88762363903051f33706f86c",
+   "spans": 11,
+   "service_spans": 2,
+   "service_status_codes": [
+    "503"
+   ],
+   "service_error_types": [
+    "503"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794950200530457
+  },
+  {
+   "traceID": "8020d7f1290553dfc51e43bf29ce1571",
+   "spans": 2,
+   "service_spans": 2,
+   "service_status_codes": [
+    "503"
+   ],
+   "service_error_types": [
+    "503"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794950199667487
+  },
+  {
+   "traceID": "9772d19e290ec5a0edb6dd709b6f5526",
+   "spans": 6,
+   "service_spans": 2,
+   "service_status_codes": [
+    "503"
+   ],
+   "service_error_types": [
+    "503"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794950199796053
+  },
+  {
+   "traceID": "8e5382209139da07c3c8fcb670a53b9f",
+   "spans": 2,
+   "service_spans": 2,
+   "service_status_codes": [
+    "503"
+   ],
+   "service_error_types": [
+    "503"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794950198920624
+  },
+  {
+   "traceID": "2372b13180df3af9d781709b4142af2e",
+   "spans": 6,
+   "service_spans": 2,
+   "service_status_codes": [
+    "503"
+   ],
+   "service_error_types": [
+    "503"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794950198119382
+  },
+  {
+   "traceID": "862d7086e6852e47277b8f92988f9072",
+   "spans": 2,
+   "service_spans": 2,
+   "service_status_codes": [
+    "503"
+   ],
+   "service_error_types": [
+    "503"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794950199918155
+  },
+  {
+   "traceID": "10b11e7d17eec870c50eaa68eab8211a",
+   "spans": 2,
+   "service_spans": 2,
+   "service_status_codes": [
+    "503"
+   ],
+   "service_error_types": [
+    "503"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794950198668651
+  },
+  {
+   "traceID": "0812d1ecfe90f7112d81910807578407",
+   "spans": 6,
+   "service_spans": 2,
+   "service_status_codes": [
+    "503"
+   ],
+   "service_error_types": [
+    "503"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794950199783961
+  },
+  {
+   "traceID": "8ecc86f8275855415cd11fc6e5261faf",
+   "spans": 2,
+   "service_spans": 2,
+   "service_status_codes": [
+    "503"
+   ],
+   "service_error_types": [
+    "503"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794950199167962
+  },
+  {
+   "traceID": "7999275a41064944a90095635f4ff808",
+   "spans": 2,
+   "service_spans": 2,
+   "service_status_codes": [
+    "503"
+   ],
+   "service_error_types": [
+    "503"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794950197920211
+  },
+  {
+   "traceID": "bb2e5d2b62677a91ccd721f55463ad1a",
+   "spans": 2,
+   "service_spans": 2,
+   "service_status_codes": [
+    "503"
+   ],
+   "service_error_types": [
+    "503"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794950199421483
+  },
+  {
+   "traceID": "947be47a7a1067103efcd31de31ebb69",
+   "spans": 2,
+   "service_spans": 2,
+   "service_status_codes": [
+    "503"
+   ],
+   "service_error_types": [
+    "503"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794950198419973
+  },
+  {
+   "traceID": "51f6fc264c28c1345115b2089911bf7a",
+   "spans": 6,
+   "service_spans": 2,
+   "service_status_codes": [
+    "503"
+   ],
+   "service_error_types": [
+    "503"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794950199183463
+  },
+  {
+   "traceID": "ecdb4f4fc6b7e43d61df5186388eaa13",
+   "spans": 2,
+   "service_spans": 2,
+   "service_status_codes": [
+    "503"
+   ],
+   "service_error_types": [
+    "503"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794950198171695
+  },
+  {
+   "traceID": "eb9e6fa86910c399787c4648ff80264a",
+   "spans": 2,
+   "service_spans": 2,
+   "service_status_codes": [
+    "503"
+   ],
+   "service_error_types": [
+    "503"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794950200175244
+  },
+  {
+   "traceID": "96ed065dba5954acd955ee529ff3798a",
+   "spans": 6,
+   "service_spans": 2,
+   "service_status_codes": [
+    "503"
+   ],
+   "service_error_types": [
+    "503"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794950197455597
+  },
+  {
+   "traceID": "be93bebceaec4e355b85a575a437640f",
+   "spans": 2,
+   "service_spans": 2,
+   "service_status_codes": [
+    "503"
+   ],
+   "service_error_types": [
+    "503"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794950197670118
+  },
+  {
+   "traceID": "1d1b54f7351cbb8a22e482f1cf778542",
+   "spans": 6,
+   "service_spans": 2,
+   "service_status_codes": [
+    "503"
+   ],
+   "service_error_types": [
+    "503"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794950198344868
+  },
+  {
+   "traceID": "cd1b1bae3ced9c5f1b4eabcde75a4128",
+   "spans": 13,
+   "service_spans": 2,
+   "service_status_codes": [
+    "503"
+   ],
+   "service_error_types": [
+    "503"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794950198280373
+  },
+  {
+   "traceID": "c829d7a1c9cf604708a1b1df4d19ef0a",
+   "spans": 9,
+   "service_spans": 2,
+   "service_status_codes": [
+    "503"
+   ],
+   "service_error_types": [
+    "503"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794950197863318
+  },
+  {
+   "traceID": "a401f4fbe1899047cb34a52da1934fab",
+   "spans": 17,
+   "service_spans": 6,
+   "service_status_codes": [
+    "200",
+    "503"
+   ],
+   "service_error_types": [
+    "503"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794950196740240
+  },
+  {
+   "traceID": "bea613296fd048f2e2e5ff38208877ad",
+   "spans": 13,
+   "service_spans": 2,
+   "service_status_codes": [
+    "503"
+   ],
+   "service_error_types": [
+    "503"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794950199990778
+  },
+  {
+   "traceID": "c9d631249fa552b8fcf340d85e66eaae",
+   "spans": 13,
+   "service_spans": 2,
+   "service_status_codes": [
+    "503"
+   ],
+   "service_error_types": [
+    "503"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794950199599869
+  },
+  {
+   "traceID": "5538081c6914534ed984de250050729a",
+   "spans": 13,
+   "service_spans": 2,
+   "service_status_codes": [
+    "503"
+   ],
+   "service_error_types": [
+    "503"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794950199409994
+  },
+  {
+   "traceID": "6f05324f18c925d208a31ebb6166f8d0",
+   "spans": 13,
+   "service_spans": 2,
+   "service_status_codes": [
+    "503"
+   ],
+   "service_error_types": [
+    "503"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794950198243324
+  },
+  {
+   "traceID": "032d58a3d5c2cec9dbbb17b37840a800",
+   "spans": 2,
+   "service_spans": 2,
+   "service_status_codes": [
+    "503"
+   ],
+   "service_error_types": [
+    "503"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794950193918006
+  },
+  {
+   "traceID": "cced1f579cc43633bf7eb3863d678716",
+   "spans": 6,
+   "service_spans": 2,
+   "service_status_codes": [
+    "503"
+   ],
+   "service_error_types": [
+    "503"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794950194298823
+  },
+  {
+   "traceID": "65962a43d3c461fd6ddc1488be11b362",
+   "spans": 17,
+   "service_spans": 6,
+   "service_status_codes": [
+    "200",
+    "503"
+   ],
+   "service_error_types": [
+    "503"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794950195682495
+  },
+  {
+   "traceID": "4625bc6ed3e859373d60d6944d41571d",
+   "spans": 6,
+   "service_spans": 2,
+   "service_status_codes": [
+    "503"
+   ],
+   "service_error_types": [
+    "503"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794950195056596
+  },
+  {
+   "traceID": "d817fa0467f551734840fde5298936f9",
+   "spans": 6,
+   "service_spans": 2,
+   "service_status_codes": [
+    "503"
+   ],
+   "service_error_types": [
+    "503"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794950193534282
+  },
+  {
+   "traceID": "ec99ade4e85b6387c9164e4349e4428b",
+   "spans": 2,
+   "service_spans": 2,
+   "service_status_codes": [
+    "503"
+   ],
+   "service_error_types": [
+    "503"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794950194167705
+  },
+  {
+   "traceID": "e27bc7880a55921cd67997bc45f43fe1",
+   "spans": 6,
+   "service_spans": 2,
+   "service_status_codes": [
+    "503"
+   ],
+   "service_error_types": [
+    "503"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794950192479491
+  },
+  {
+   "traceID": "35c98aa1338676df26f4fc2c0afcba6f",
+   "spans": 2,
+   "service_spans": 2,
+   "service_status_codes": [
+    "503"
+   ],
+   "service_error_types": [
+    "503"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794950194674498
+  },
+  {
+   "traceID": "2ed2041c8af3084452cb7e2149e28cb7",
+   "spans": 6,
+   "service_spans": 2,
+   "service_status_codes": [
+    "503"
+   ],
+   "service_error_types": [
+    "503"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794950194862356
+  },
+  {
+   "traceID": "dc0d99f16f3095e693f7846775684c45",
+   "spans": 6,
+   "service_spans": 2,
+   "service_status_codes": [
+    "503"
+   ],
+   "service_error_types": [
+    "503"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794950193437965
+  },
+  {
+   "traceID": "d1adbf23a3c704ec00ab15b3d243c840",
+   "spans": 2,
+   "service_spans": 2,
+   "service_status_codes": [
+    "503"
+   ],
+   "service_error_types": [
+    "503"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794950194425750
+  },
+  {
+   "traceID": "2a676d8f91f83b6f28512e53d20aa1c6",
+   "spans": 2,
+   "service_spans": 2,
+   "service_status_codes": [
+    "503"
+   ],
+   "service_error_types": [
+    "503"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794950192918623
+  },
+  {
+   "traceID": "e2c280c1363d8d87074f537f03771a01",
+   "spans": 2,
+   "service_spans": 2,
+   "service_status_codes": [
+    "503"
+   ],
+   "service_error_types": [
+    "503"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794950193419281
+  },
+  {
+   "traceID": "8c8ca9cb973b5c1118b0d7ac35954373",
+   "spans": 6,
+   "service_spans": 2,
+   "service_status_codes": [
+    "503"
+   ],
+   "service_error_types": [
+    "503"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794950193831449
+  },
+  {
+   "traceID": "7f5c945f21b7a117fce966dcef180520",
+   "spans": 6,
+   "service_spans": 2,
+   "service_status_codes": [
+    "503"
+   ],
+   "service_error_types": [
+    "503"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794950192611374
+  }
+ ]
+}

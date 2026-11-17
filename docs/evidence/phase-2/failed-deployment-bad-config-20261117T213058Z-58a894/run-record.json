@@ -1,0 +1,404 @@
+{
+  "schema_version": 1,
+  "kind": "run",
+  "id": "failed-deployment-bad-config",
+  "number": 3,
+  "title": "Failed deployment: user-service 2.4.0 with a bad database config",
+  "injected_fault": {
+    "trigger": "deploy user-service 2.4.0 with DATABASE_NAME=users_v2",
+    "description": "The deploy pipeline releases user-service 2.4.0 whose config sets DATABASE_NAME=users_v2, a database that does not exist. Deploy events are emitted. Every new user-service process fails at startup and exits; Docker restarts it, so it crash-loops. Logins and session checks through the gateway fail.",
+    "stop": "roll back: deploy user-service 2.3.0 with its original config (a second pair of deploy events)"
+  },
+  "root_cause": {
+    "category": "bad_deployment",
+    "service": "user-service",
+    "component": "release 2.4.0 config DATABASE_NAME=users_v2 (database does not exist)",
+    "summary": "Release 2.4.0 of user-service points its database at users_v2, which does not exist, so every instance fails during startup and the container crash-loops; api-gateway's login and session calls to user-service fail, so login and account pages return errors. Rolling back to 2.3.0 fixes it.",
+    "code_location": null
+  },
+  "expected_symptoms": [
+    {
+      "id": "bad-deploy-event",
+      "signal": "event",
+      "backend": "loki",
+      "description": "Deploy events for user-service 2.4.0 in the deploy pipeline's logs.",
+      "query": "sum(count_over_time({service_name=\"deploy-pipeline\"} | deployment_service_name=\"user-service\" | deployment_version=\"2.4.0\" [1m]))",
+      "condition": {
+        "op": ">",
+        "threshold": 0,
+        "min_points": 1
+      }
+    },
+    {
+      "id": "user-startup-failure-logs",
+      "signal": "log",
+      "backend": "loki",
+      "description": "user-service startup failures naming the missing database users_v2.",
+      "query": "sum(count_over_time({service_name=\"user-service\"} |= \"users_v2\" [1m]))",
+      "condition": {
+        "op": ">",
+        "threshold": 0,
+        "min_points": 2
+      }
+    },
+    {
+      "id": "user-instance-churn",
+      "signal": "log",
+      "backend": "loki",
+      "description": "Crash-looping: at least 3 distinct user-service instances logged a start within 5 minutes.",
+      "query": "count(count by (service_instance_id) (count_over_time({service_name=\"user-service\"} |= \"service starting\" [5m])))",
+      "condition": {
+        "op": ">=",
+        "threshold": 3,
+        "min_points": 1
+      }
+    },
+    {
+      "id": "gateway-auth-5xx",
+      "signal": "metric",
+      "backend": "prometheus",
+      "description": "api-gateway login and account calls fail: 5xx share above 50% for 1 minute.",
+      "query": "(sum(rate(http_server_request_duration_seconds_count{service_name=\"api-gateway\", http_route=~\"/api/login|/api/account\", http_response_status_code=~\"5..\"}[1m])) or vector(0)) / sum(rate(http_server_request_duration_seconds_count{service_name=\"api-gateway\", http_route=~\"/api/login|/api/account\"}[1m]))",
+      "condition": {
+        "op": ">",
+        "threshold": 0.5,
+        "min_points": 4
+      }
+    },
+    {
+      "id": "frontend-account-5xx",
+      "signal": "metric",
+      "backend": "prometheus",
+      "description": "Users see it: frontend login/account 5xx share above 20% for 1 minute.",
+      "query": "(sum(rate(http_server_request_duration_seconds_count{service_name=\"frontend\", http_route=~\"/login|/account\", http_response_status_code=~\"5..\"}[1m])) or vector(0)) / sum(rate(http_server_request_duration_seconds_count{service_name=\"frontend\", http_route=~\"/login|/account\"}[1m]))",
+      "condition": {
+        "op": ">",
+        "threshold": 0.2,
+        "min_points": 4
+      }
+    },
+    {
+      "id": "gateway-auth-error-traces",
+      "signal": "trace",
+      "backend": "jaeger",
+      "description": "api-gateway POST /api/login traces with a 503 server span (user-service unreachable).",
+      "query": {
+        "service": "api-gateway",
+        "operation": "POST /api/login",
+        "tags": {
+          "http.response.status_code": "503"
+        }
+      },
+      "condition": {
+        "op": ">=",
+        "threshold": 5
+      }
+    },
+    {
+      "id": "catalogue-unaffected",
+      "signal": "metric",
+      "backend": "prometheus",
+      "description": "Browsing does not need user-service: frontend product pages 5xx share stays below 1%.",
+      "query": "(sum(rate(http_server_request_duration_seconds_count{service_name=\"frontend\", http_route=~\"/products|/products/{sku}\", http_response_status_code=~\"5..\"}[1m])) or vector(0)) / sum(rate(http_server_request_duration_seconds_count{service_name=\"frontend\", http_route=~\"/products|/products/{sku}\"}[1m]))",
+      "condition": {
+        "op": "<",
+        "threshold": 0.01,
+        "min_fraction": 1.0
+      }
+    }
+  ],
+  "recovery_checks": [
+    {
+      "id": "gateway-auth-5xx-low",
+      "signal": "metric",
+      "backend": "prometheus",
+      "description": "api-gateway login/account 5xx share below 1%.",
+      "query": "(sum(rate(http_server_request_duration_seconds_count{service_name=\"api-gateway\", http_route=~\"/api/login|/api/account\", http_response_status_code=~\"5..\"}[1m])) or vector(0)) / sum(rate(http_server_request_duration_seconds_count{service_name=\"api-gateway\", http_route=~\"/api/login|/api/account\"}[1m]))",
+      "condition": {
+        "op": "<",
+        "threshold": 0.01,
+        "min_fraction": 1.0
+      }
+    },
+    {
+      "id": "user-service-serving",
+      "signal": "metric",
+      "backend": "prometheus",
+      "description": "user-service is serving requests again.",
+      "query": "sum(rate(http_server_request_duration_seconds_count{service_name=\"user-service\"}[1m])) or vector(0)",
+      "condition": {
+        "op": ">",
+        "threshold": 0.5,
+        "min_fraction": 1.0
+      }
+    }
+  ],
+  "expected_affected_services": [
+    "user-service",
+    "api-gateway",
+    "frontend"
+  ],
+  "unaffected_services": [
+    "order-service",
+    "payment-service"
+  ],
+  "timeline": {
+    "started_at": "2026-11-17T21:32:59+00:00",
+    "ended_at": "2026-11-17T21:39:09+00:00"
+  },
+  "run": {
+    "run_id": "20261117T213058Z-58a894",
+    "seed": 42,
+    "status": "verified",
+    "mode": "full",
+    "windows": {
+      "baseline_s": 120,
+      "observe_s": 300,
+      "recovery_s": 180
+    },
+    "baseline_started_at": "2026-11-17T21:30:59+00:00",
+    "recovery_ended_at": "2026-11-17T21:42:09+00:00",
+    "baseline_healthy": true,
+    "baseline_checks": [
+      {
+        "id": "gateway-auth-5xx-low",
+        "observed": true,
+        "baseline": null,
+        "threshold": 0.01,
+        "points": 9,
+        "points_met": 9,
+        "peak": 0.0,
+        "onset_s": 0.0,
+        "detail": "9/9 points < 0.01 (needs >= 100% of points)",
+        "evidence": [
+          "001-prometheus.json"
+        ]
+      },
+      {
+        "id": "user-service-serving",
+        "observed": true,
+        "baseline": null,
+        "threshold": 0.5,
+        "points": 9,
+        "points_met": 9,
+        "peak": 5.258001959255482,
+        "onset_s": 0.0,
+        "detail": "9/9 points > 0.5 (needs >= 100% of points)",
+        "evidence": [
+          "002-prometheus.json"
+        ]
+      }
+    ],
+    "observed": [
+      {
+        "id": "bad-deploy-event",
+        "observed": true,
+        "baseline": null,
+        "threshold": 0.0,
+        "points": 7,
+        "points_met": 7,
+        "peak": 2.0,
+        "onset_s": 1.0,
+        "detail": "7/7 points > 0 (needs >= 1 consecutive points)",
+        "evidence": [
+          "003-loki.json"
+        ]
+      },
+      {
+        "id": "user-startup-failure-logs",
+        "observed": true,
+        "baseline": null,
+        "threshold": 0.0,
+        "points": 23,
+        "points_met": 23,
+        "peak": 8.0,
+        "onset_s": 16.0,
+        "detail": "23/23 points > 0 (needs >= 2 consecutive points)",
+        "evidence": [
+          "004-loki.json"
+        ]
+      },
+      {
+        "id": "user-instance-churn",
+        "observed": true,
+        "baseline": null,
+        "threshold": 3.0,
+        "points": 23,
+        "points_met": 23,
+        "peak": 12.0,
+        "onset_s": 16.0,
+        "detail": "23/23 points >= 3 (needs >= 1 consecutive points)",
+        "evidence": [
+          "005-loki.json"
+        ]
+      },
+      {
+        "id": "gateway-auth-5xx",
+        "observed": true,
+        "baseline": null,
+        "threshold": 0.5,
+        "points": 24,
+        "points_met": 21,
+        "peak": 1.0,
+        "onset_s": 45.0,
+        "detail": "21/24 points > 0.5 (needs >= 4 consecutive points)",
+        "evidence": [
+          "006-prometheus.json"
+        ]
+      },
+      {
+        "id": "frontend-account-5xx",
+        "observed": true,
+        "baseline": null,
+        "threshold": 0.2,
+        "points": 24,
+        "points_met": 23,
+        "peak": 1.0,
+        "onset_s": 15.0,
+        "detail": "23/24 points > 0.2 (needs >= 4 consecutive points)",
+        "evidence": [
+          "007-prometheus.json"
+        ]
+      },
+      {
+        "id": "gateway-auth-error-traces",
+        "observed": true,
+        "baseline": null,
+        "threshold": 5.0,
+        "points": 50,
+        "points_met": 50,
+        "peak": 50.0,
+        "onset_s": 230.2,
+        "detail": "50 matching traces >= 5?",
+        "evidence": [
+          "008-jaeger.json"
+        ]
+      },
+      {
+        "id": "catalogue-unaffected",
+        "observed": true,
+        "baseline": null,
+        "threshold": 0.01,
+        "points": 24,
+        "points_met": 24,
+        "peak": 0.0,
+        "onset_s": 0.0,
+        "detail": "24/24 points < 0.01 (needs >= 100% of points)",
+        "evidence": [
+          "009-prometheus.json"
+        ]
+      }
+    ],
+    "recovery": [
+      {
+        "id": "gateway-auth-5xx-low",
+        "observed": true,
+        "baseline": null,
+        "threshold": 0.01,
+        "points": 7,
+        "points_met": 7,
+        "peak": 0.0,
+        "onset_s": 0.0,
+        "detail": "7/7 points < 0.01 (needs >= 100% of points)",
+        "evidence": [
+          "010-prometheus.json"
+        ]
+      },
+      {
+        "id": "user-service-serving",
+        "observed": true,
+        "baseline": null,
+        "threshold": 0.5,
+        "points": 7,
+        "points_met": 7,
+        "peak": 5.218121476268544,
+        "onset_s": 0.0,
+        "detail": "7/7 points > 0.5 (needs >= 100% of points)",
+        "evidence": [
+          "011-prometheus.json"
+        ]
+      }
+    ],
+    "fingerprint": {
+      "symptoms": [
+        {
+          "id": "bad-deploy-event",
+          "onset_bucket": 0,
+          "magnitude_bucket": null
+        },
+        {
+          "id": "catalogue-unaffected",
+          "onset_bucket": 0,
+          "magnitude_bucket": null
+        },
+        {
+          "id": "frontend-account-5xx",
+          "onset_bucket": 1,
+          "magnitude_bucket": 2
+        },
+        {
+          "id": "gateway-auth-5xx",
+          "onset_bucket": 3,
+          "magnitude_bucket": 1
+        },
+        {
+          "id": "gateway-auth-error-traces",
+          "onset_bucket": null,
+          "magnitude_bucket": 3
+        },
+        {
+          "id": "user-instance-churn",
+          "onset_bucket": 1,
+          "magnitude_bucket": 2
+        },
+        {
+          "id": "user-startup-failure-logs",
+          "onset_bucket": 1,
+          "magnitude_bucket": null
+        }
+      ]
+    },
+    "memory": {
+      "min_available_mb": 10679,
+      "abort_below_mb": 500
+    },
+    "reasons": [],
+    "steps": [
+      {
+        "at": "2026-11-17T21:30:59+00:00",
+        "step": "reset",
+        "detail": "scenario failed-deployment-bad-config (full)"
+      },
+      {
+        "at": "2026-11-17T21:30:59+00:00",
+        "step": "traffic",
+        "detail": "mix=baseline seed=42"
+      },
+      {
+        "at": "2026-11-17T21:32:59+00:00",
+        "step": "baseline",
+        "detail": "healthy: gateway-auth-5xx-low, user-service-serving"
+      },
+      {
+        "at": "2026-11-17T21:33:44+00:00",
+        "step": "deploy",
+        "detail": "user-service 2.4.0: failed in 45.3s"
+      },
+      {
+        "at": "2026-11-17T21:38:44+00:00",
+        "step": "observe",
+        "detail": "bad-deploy-event=yes, user-startup-failure-logs=yes, user-instance-churn=yes, gateway-auth-5xx=yes, frontend-account-5xx=yes, gateway-auth-error-traces=yes, catalogue-unaffected=yes"
+      },
+      {
+        "at": "2026-11-17T21:39:09+00:00",
+        "step": "deploy",
+        "detail": "user-service 2.3.0: succeeded in 25.2s"
+      },
+      {
+        "at": "2026-11-17T21:42:09+00:00",
+        "step": "recovery",
+        "detail": "gateway-auth-5xx-low=ok, user-service-serving=ok"
+      }
+    ]
+  }
+}

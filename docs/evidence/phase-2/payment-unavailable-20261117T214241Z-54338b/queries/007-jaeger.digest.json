@@ -1,0 +1,722 @@
+{
+ "backend": "jaeger",
+ "query": {
+  "service": "order-service",
+  "operation": "POST /orders",
+  "tags": {
+   "http.response.status_code": "503"
+  }
+ },
+ "params": {
+  "service": "order-service",
+  "start": "1794951881751484",
+  "end": "1794952181769878",
+  "limit": "50",
+  "operation": "POST /orders",
+  "tags": "{\"http.response.status_code\": \"503\"}"
+ },
+ "raw_sha256": "1b92c219749bbd453fe62320bd34dd704cc5fc9f9528aab069c84fb507dcf4a5",
+ "raw_bytes": 2496500,
+ "traces": [
+  {
+   "traceID": "e6912a70d0cb02efbe5854a4dca4edda",
+   "spans": 9,
+   "service_spans": 7,
+   "service_status_codes": [
+    "503"
+   ],
+   "service_error_types": [
+    "503",
+    "ConnectError"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794952178660369
+  },
+  {
+   "traceID": "38c85479ac29574d07203114c0485365",
+   "spans": 9,
+   "service_spans": 7,
+   "service_status_codes": [
+    "503"
+   ],
+   "service_error_types": [
+    "503",
+    "ConnectError"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794952178942058
+  },
+  {
+   "traceID": "78fbee49d37ae878eff9b54987c4a572",
+   "spans": 12,
+   "service_spans": 7,
+   "service_status_codes": [
+    "503"
+   ],
+   "service_error_types": [
+    "503",
+    "ConnectError"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794952178059240
+  },
+  {
+   "traceID": "09532083630d9830d04b2042c0e3bd03",
+   "spans": 12,
+   "service_spans": 7,
+   "service_status_codes": [
+    "503"
+   ],
+   "service_error_types": [
+    "503",
+    "ConnectError"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794952178344395
+  },
+  {
+   "traceID": "3ac9b405c67420d74a46947a83bf0429",
+   "spans": 14,
+   "service_spans": 7,
+   "service_status_codes": [
+    "503"
+   ],
+   "service_error_types": [
+    "503",
+    "ConnectError"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794952173057836
+  },
+  {
+   "traceID": "cefdf18a9dc8a8bcb1c39959b7faa26f",
+   "spans": 14,
+   "service_spans": 7,
+   "service_status_codes": [
+    "503"
+   ],
+   "service_error_types": [
+    "503",
+    "ConnectError"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794952173245565
+  },
+  {
+   "traceID": "bc2f0b3194ac70349cfac91ce26aec7e",
+   "spans": 14,
+   "service_spans": 7,
+   "service_status_codes": [
+    "503"
+   ],
+   "service_error_types": [
+    "503",
+    "ConnectError"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794952169621169
+  },
+  {
+   "traceID": "27fcf9930a9ad0c154e04c0693f96eac",
+   "spans": 14,
+   "service_spans": 7,
+   "service_status_codes": [
+    "503"
+   ],
+   "service_error_types": [
+    "503",
+    "ConnectError"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794952170611380
+  },
+  {
+   "traceID": "54cbe791833de6643f6088aea56e44f9",
+   "spans": 14,
+   "service_spans": 7,
+   "service_status_codes": [
+    "503"
+   ],
+   "service_error_types": [
+    "503",
+    "ConnectError"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794952170097427
+  },
+  {
+   "traceID": "6d7e9d03d3ae81ddab2f778ec830272e",
+   "spans": 14,
+   "service_spans": 7,
+   "service_status_codes": [
+    "503"
+   ],
+   "service_error_types": [
+    "503",
+    "ConnectError"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794952172034658
+  },
+  {
+   "traceID": "0922d7d257f426a95f3bb70e74fd2576",
+   "spans": 14,
+   "service_spans": 7,
+   "service_status_codes": [
+    "503"
+   ],
+   "service_error_types": [
+    "503",
+    "ConnectError"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794952169294732
+  },
+  {
+   "traceID": "e75425ad257eadf65a17cf043519cebf",
+   "spans": 14,
+   "service_spans": 7,
+   "service_status_codes": [
+    "503"
+   ],
+   "service_error_types": [
+    "503",
+    "ConnectError"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794952168970483
+  },
+  {
+   "traceID": "6261a56469be77aee9bc728e48ac1b89",
+   "spans": 14,
+   "service_spans": 7,
+   "service_status_codes": [
+    "503"
+   ],
+   "service_error_types": [
+    "503",
+    "ConnectError"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794952167008920
+  },
+  {
+   "traceID": "0d1564463f489c72dcfc71419ca6a986",
+   "spans": 14,
+   "service_spans": 7,
+   "service_status_codes": [
+    "503"
+   ],
+   "service_error_types": [
+    "503",
+    "ConnectError"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794952165554196
+  },
+  {
+   "traceID": "6f3d75e905cca9d7d1feae8b4930c2fb",
+   "spans": 14,
+   "service_spans": 7,
+   "service_status_codes": [
+    "503"
+   ],
+   "service_error_types": [
+    "503",
+    "ConnectError"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794952164965855
+  },
+  {
+   "traceID": "e84bfb8b80874c3b2e896e830361a8b0",
+   "spans": 14,
+   "service_spans": 7,
+   "service_status_codes": [
+    "503"
+   ],
+   "service_error_types": [
+    "503",
+    "ConnectError"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794952160468659
+  },
+  {
+   "traceID": "1948ad21da0d11192a1f6bb7e93dda89",
+   "spans": 14,
+   "service_spans": 7,
+   "service_status_codes": [
+    "503"
+   ],
+   "service_error_types": [
+    "503",
+    "ConnectError"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794952159663329
+  },
+  {
+   "traceID": "506e34556eb7ab09293a0ab969dba1eb",
+   "spans": 14,
+   "service_spans": 7,
+   "service_status_codes": [
+    "503"
+   ],
+   "service_error_types": [
+    "503",
+    "ConnectError"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794952160902263
+  },
+  {
+   "traceID": "994af344e155ae7a049126cf855a6356",
+   "spans": 14,
+   "service_spans": 7,
+   "service_status_codes": [
+    "503"
+   ],
+   "service_error_types": [
+    "503",
+    "ConnectError"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794952155177755
+  },
+  {
+   "traceID": "4c56d046e95ec5ce82fe3aa2c27e5e09",
+   "spans": 14,
+   "service_spans": 7,
+   "service_status_codes": [
+    "503"
+   ],
+   "service_error_types": [
+    "503",
+    "ConnectError"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794952152647112
+  },
+  {
+   "traceID": "19b83bc2dab807c59cdd448b803e43de",
+   "spans": 14,
+   "service_spans": 7,
+   "service_status_codes": [
+    "503"
+   ],
+   "service_error_types": [
+    "503",
+    "ConnectError"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794952150284580
+  },
+  {
+   "traceID": "81b7231f275d4e46fa3b4330c612087c",
+   "spans": 14,
+   "service_spans": 7,
+   "service_status_codes": [
+    "503"
+   ],
+   "service_error_types": [
+    "503",
+    "ConnectError"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794952149515701
+  },
+  {
+   "traceID": "ec5591c7181d9afd3f494493947dd376",
+   "spans": 14,
+   "service_spans": 7,
+   "service_status_codes": [
+    "503"
+   ],
+   "service_error_types": [
+    "503",
+    "ConnectError"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794952152110541
+  },
+  {
+   "traceID": "60b00556bd6e3c94366d9a19c62b2426",
+   "spans": 14,
+   "service_spans": 7,
+   "service_status_codes": [
+    "503"
+   ],
+   "service_error_types": [
+    "503",
+    "ConnectError"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794952151405277
+  },
+  {
+   "traceID": "46b0dcb128cbc0035440837dd646fb60",
+   "spans": 14,
+   "service_spans": 7,
+   "service_status_codes": [
+    "503"
+   ],
+   "service_error_types": [
+    "503",
+    "ConnectError"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794952151030627
+  },
+  {
+   "traceID": "2a35b0ca4f43c1531b00f8317b068f41",
+   "spans": 14,
+   "service_spans": 7,
+   "service_status_codes": [
+    "503"
+   ],
+   "service_error_types": [
+    "503",
+    "ConnectError"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794952148351681
+  },
+  {
+   "traceID": "c00ec87792473186d61aa9fdbe0e40c3",
+   "spans": 14,
+   "service_spans": 7,
+   "service_status_codes": [
+    "503"
+   ],
+   "service_error_types": [
+    "503",
+    "ConnectError"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794952145730012
+  },
+  {
+   "traceID": "8272dc370fbba3302f1cdfc6df332bd1",
+   "spans": 14,
+   "service_spans": 7,
+   "service_status_codes": [
+    "503"
+   ],
+   "service_error_types": [
+    "503",
+    "ConnectError"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794952147926694
+  },
+  {
+   "traceID": "2fac29c412592cfc543114c4953917cf",
+   "spans": 14,
+   "service_spans": 7,
+   "service_status_codes": [
+    "503"
+   ],
+   "service_error_types": [
+    "503",
+    "ConnectError"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794952144861135
+  },
+  {
+   "traceID": "ce95df333f620458cdf0eb4022e237d0",
+   "spans": 14,
+   "service_spans": 7,
+   "service_status_codes": [
+    "503"
+   ],
+   "service_error_types": [
+    "503",
+    "ConnectError"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794952144812272
+  },
+  {
+   "traceID": "51133d6dd9cb4bc21851050399ca8006",
+   "spans": 14,
+   "service_spans": 7,
+   "service_status_codes": [
+    "503"
+   ],
+   "service_error_types": [
+    "503",
+    "ConnectError"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794952144601784
+  },
+  {
+   "traceID": "4c0024a2a67a8b833c4cef96d8eed9d7",
+   "spans": 14,
+   "service_spans": 7,
+   "service_status_codes": [
+    "503"
+   ],
+   "service_error_types": [
+    "503",
+    "ConnectError"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794952147488821
+  },
+  {
+   "traceID": "f5806a009af733936e7e155ed34b9a53",
+   "spans": 14,
+   "service_spans": 7,
+   "service_status_codes": [
+    "503"
+   ],
+   "service_error_types": [
+    "503",
+    "ConnectError"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794952147523615
+  },
+  {
+   "traceID": "f02d0599e91a85257f23566b5bb40cc0",
+   "spans": 14,
+   "service_spans": 7,
+   "service_status_codes": [
+    "503"
+   ],
+   "service_error_types": [
+    "503",
+    "ConnectError"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794952143274945
+  },
+  {
+   "traceID": "aef4abb781ce1ff92fee52ab27d41e82",
+   "spans": 14,
+   "service_spans": 7,
+   "service_status_codes": [
+    "503"
+   ],
+   "service_error_types": [
+    "503",
+    "ConnectError"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794952143385638
+  },
+  {
+   "traceID": "5aab421bf13208e217b1181a97189148",
+   "spans": 14,
+   "service_spans": 7,
+   "service_status_codes": [
+    "503"
+   ],
+   "service_error_types": [
+    "503",
+    "ConnectError"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794952140990001
+  },
+  {
+   "traceID": "943fb337e0e5fb0e104edc22910f033b",
+   "spans": 14,
+   "service_spans": 7,
+   "service_status_codes": [
+    "503"
+   ],
+   "service_error_types": [
+    "503",
+    "ConnectError"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794952140101841
+  },
+  {
+   "traceID": "d1b9b233d9578381c9c7af92e70c7430",
+   "spans": 14,
+   "service_spans": 7,
+   "service_status_codes": [
+    "503"
+   ],
+   "service_error_types": [
+    "503",
+    "ConnectError"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794952141745772
+  },
+  {
+   "traceID": "e7ec830743c55e86f623de11943494ed",
+   "spans": 14,
+   "service_spans": 7,
+   "service_status_codes": [
+    "503"
+   ],
+   "service_error_types": [
+    "503",
+    "ConnectError"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794952139315344
+  },
+  {
+   "traceID": "8a09394b1801e88cfc0573481fffe673",
+   "spans": 14,
+   "service_spans": 7,
+   "service_status_codes": [
+    "503"
+   ],
+   "service_error_types": [
+    "503",
+    "ConnectError"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794952134587107
+  },
+  {
+   "traceID": "c2c1a68ad1a2875b8a672c4c2a614e0a",
+   "spans": 14,
+   "service_spans": 7,
+   "service_status_codes": [
+    "503"
+   ],
+   "service_error_types": [
+    "503",
+    "ConnectError"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794952138332677
+  },
+  {
+   "traceID": "0b1ebc18c71180f6581cd799bd1765ab",
+   "spans": 14,
+   "service_spans": 7,
+   "service_status_codes": [
+    "503"
+   ],
+   "service_error_types": [
+    "503",
+    "ConnectError"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794952134648282
+  },
+  {
+   "traceID": "5b19aed6a2300751a660a44668d7e85a",
+   "spans": 14,
+   "service_spans": 7,
+   "service_status_codes": [
+    "503"
+   ],
+   "service_error_types": [
+    "503",
+    "ConnectError"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794952134826594
+  },
+  {
+   "traceID": "8216a258a51b17d3a374d6aeaaa8dbd3",
+   "spans": 14,
+   "service_spans": 7,
+   "service_status_codes": [
+    "503"
+   ],
+   "service_error_types": [
+    "503",
+    "ConnectError"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794952137350307
+  },
+  {
+   "traceID": "f789554fe52e10d290b42c11b65c24ee",
+   "spans": 14,
+   "service_spans": 7,
+   "service_status_codes": [
+    "503"
+   ],
+   "service_error_types": [
+    "503",
+    "ConnectError"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794952132751899
+  },
+  {
+   "traceID": "0f4624796e7130db47e4a1cbfcc76e73",
+   "spans": 14,
+   "service_spans": 7,
+   "service_status_codes": [
+    "503"
+   ],
+   "service_error_types": [
+    "503",
+    "ConnectError"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794952133967028
+  },
+  {
+   "traceID": "6833fa9895d4cc3e6339b3551f684d0b",
+   "spans": 14,
+   "service_spans": 7,
+   "service_status_codes": [
+    "503"
+   ],
+   "service_error_types": [
+    "503",
+    "ConnectError"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794952130577069
+  },
+  {
+   "traceID": "ea2276ba988e9b9de88350fa1d3acc2b",
+   "spans": 14,
+   "service_spans": 7,
+   "service_status_codes": [
+    "503"
+   ],
+   "service_error_types": [
+    "503",
+    "ConnectError"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794952130468885
+  },
+  {
+   "traceID": "42d14931460fc3eaec221ecef6feab2d",
+   "spans": 14,
+   "service_spans": 7,
+   "service_status_codes": [
+    "503"
+   ],
+   "service_error_types": [
+    "503",
+    "ConnectError"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794952130941820
+  },
+  {
+   "traceID": "dd6c6b9f6310e73fcfe46cceee5c73d6",
+   "spans": 14,
+   "service_spans": 7,
+   "service_status_codes": [
+    "503"
+   ],
+   "service_error_types": [
+    "503",
+    "ConnectError"
+   ],
+   "service_error_spans": 2,
+   "start_us": 1794952131830232
+  }
+ ]
+}

@@ -1,0 +1,59 @@
+{
+  "backend": "prometheus",
+  "query": "histogram_quantile(0.95, sum by (le) (rate(http_server_request_duration_seconds_bucket{service_name=\"frontend\", http_route=\"/account\", http_request_method=\"GET\"}[1m])))",
+  "params": {
+    "query": "histogram_quantile(0.95, sum by (le) (rate(http_server_request_duration_seconds_bucket{service_name=\"frontend\", http_route=\"/account\", http_request_method=\"GET\"}[1m])))",
+    "step": "15s",
+    "start": "1794950420.749",
+    "end": "1794950540.754"
+  },
+  "response": {
+    "status": "success",
+    "data": {
+      "resultType": "matrix",
+      "result": [
+        {
+          "metric": {},
+          "values": [
+            [
+              1794950420.749,
+              "0.024620129870129872"
+            ],
+            [
+              1794950435.749,
+              "0.024651408450704224"
+            ],
+            [
+              1794950450.749,
+              "0.02468846153846154"
+            ],
+            [
+              1794950465.749,
+              "0.027812499999999997"
+            ],
+            [
+              1794950480.749,
+              "0.02531250000000002"
+            ],
+            [
+              1794950495.749,
+              "0.02494512195121951"
+            ],
+            [
+              1794950510.749,
+              "0.02499025974025974"
+            ],
+            [
+              1794950525.749,
+              "0.028749999999999987"
+            ],
+            [
+              1794950540.749,
+              "0.03199999999999998"
+            ]
+          ]
+        }
+      ]
+    }
+  }
+}
