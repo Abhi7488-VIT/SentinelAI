@@ -27,7 +27,9 @@ def main(out_path: str) -> None:
         jwt_secret=SecretStr("openapi-export-only-" + "x" * 32),
     )
     schema = create_app(settings).openapi()
-    Path(out_path).write_text(json.dumps(schema, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    # newline="\n": byte-identical output on every OS (CI diffs it against the committed copy).
+    with Path(out_path).open("w", encoding="utf-8", newline="\n") as fh:
+        fh.write(json.dumps(schema, indent=2, sort_keys=True) + "\n")
 
 
 if __name__ == "__main__":

@@ -23,7 +23,7 @@ Read at the start of every session. Updated at the end of each phase.
 | T6 Orgs / RBAC / projects | done |
 | T7 Readiness | done |
 | T8 Frontend | done |
-| T9 CI | |
+| T9 CI | done (validated locally; no GitHub remote yet) |
 | T10 Docs + report | |
 
 ## Environment notes
