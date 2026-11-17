@@ -43,8 +43,16 @@ warn_if_sentinelai_running() {
   fi
 }
 
+memguard_check() {
+  # Refuse to start below the memory floor (TB_MIN_AVAILABLE_MB; default 1024 MiB on Linux).
+  command -v python3 >/dev/null 2>&1 || die "python3 is required for the memory check"
+  PYTHONPATH="$TB_DIR" python3 -m harness.memguard check \
+    || die "not enough free memory to start the testbed (set TB_MIN_AVAILABLE_MB to change the floor)"
+}
+
 cmd_up() {
   ensure_env
+  memguard_check
   warn_if_sentinelai_running
   log "building and starting (waits until every service is healthy)"
   "${COMPOSE[@]}" up --build -d --wait --wait-timeout 300
