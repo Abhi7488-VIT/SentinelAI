@@ -26,6 +26,21 @@ Read at the start of every session. Updated at the end of each phase.
 | T9 CI | done (validated locally; no GitHub remote yet) |
 | T10 Docs + report | done |
 
+## Phase 2 task log
+
+| Task | Status |
+|---|---|
+| T1 Skeleton (uv project, compose, limits, Makefile + tb.sh) | done |
+| T2 Services | |
+| T3 Telemetry + Collector | |
+| T4 Backends | |
+| T5 Loadgen + deploy emitter | |
+| T6 Controller + ground truth | |
+| T7 S1 pool exhaustion | |
+| T8 S2–S5 | |
+| T9 Reproducibility + CI | |
+| T10 Docs + report | |
+
 ## Phase 1 summary
 
 **Implemented:** monorepo; Compose stack (postgres, redis, one-shot migrate, backend, worker,

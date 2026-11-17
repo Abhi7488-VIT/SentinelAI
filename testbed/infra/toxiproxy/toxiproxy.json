@@ -1,0 +1,8 @@
+[
+  {
+    "name": "order-to-payment",
+    "listen": "0.0.0.0:18000",
+    "upstream": "payment-service:8000",
+    "enabled": true
+  }
+]

@@ -1,0 +1,164 @@
+# SentinelAI testbed — the "shop" system under test plus its infrastructure.
+# Use the workflow at the repo root: `make testbed-up` / `make testbed-down` (or testbed/tb.sh).
+#
+# Rules (docs/plans/phase-2.md §2.4, enforced by tests/unit/test_compose.py):
+#   - every container has mem_limit == memswap_limit (no swap: a container at its limit is
+#     OOM-killed inside its own cgroup; the host is never at risk)
+#   - published ports bind to 127.0.0.1 only; only the frontend is published in T1
+
+name: sentinelai-testbed
+
+x-shop-service: &shop-service
+  build:
+    context: .
+    target: services
+  image: sentinelai-testbed-shop:dev
+  restart: unless-stopped
+  networks: [shop]
+  healthcheck:
+    test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=3)"]
+    interval: 10s
+    timeout: 5s
+    retries: 6
+    start_period: 15s
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    command: ["postgres", "-c", "shared_buffers=64MB", "-c", "max_connections=60"]
+    environment:
+      POSTGRES_USER: testbed
+      POSTGRES_DB: testbed
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in testbed/.env}
+      USERS_DB_PASSWORD: ${USERS_DB_PASSWORD:?set USERS_DB_PASSWORD}
+      ORDERS_DB_PASSWORD: ${ORDERS_DB_PASSWORD:?set ORDERS_DB_PASSWORD}
+      PAYMENTS_DB_PASSWORD: ${PAYMENTS_DB_PASSWORD:?set PAYMENTS_DB_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./infra/postgres/init:/docker-entrypoint-initdb.d:ro
+    networks: [shop]
+    mem_limit: 384m
+    memswap_limit: 384m
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U testbed -d testbed"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?set REDIS_PASSWORD}
+    command: ["sh", "-c", "exec redis-server --requirepass \"$$REDIS_PASSWORD\" --maxmemory 48mb --maxmemory-policy allkeys-lru --save ''"]
+    networks: [shop]
+    mem_limit: 64m
+    memswap_limit: 64m
+    healthcheck:
+      test: ["CMD-SHELL", "REDISCLI_AUTH=\"$$REDIS_PASSWORD\" redis-cli ping | grep -q PONG"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  toxiproxy:
+    image: ghcr.io/shopify/toxiproxy:2.12.0
+    restart: unless-stopped
+    command: ["-host=0.0.0.0", "-config=/config/toxiproxy.json"]
+    volumes:
+      - ./infra/toxiproxy/toxiproxy.json:/config/toxiproxy.json:ro
+    networks: [shop]
+    mem_limit: 48m
+    memswap_limit: 48m
+    healthcheck:
+      test: ["CMD", "/toxiproxy-cli", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
+  payment-service:
+    <<: *shop-service
+    command: ["uvicorn", "shop.payment_service.main:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000", "--no-server-header", "--no-access-log"]
+    environment:
+      SERVICE_VERSION: "1.2.0"
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      DATABASE_URL: postgresql+asyncpg://payments_svc:${PAYMENTS_DB_PASSWORD}@postgres:5432/payments
+    mem_limit: 160m
+    memswap_limit: 160m
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  order-service:
+    <<: *shop-service
+    command: ["uvicorn", "shop.order_service.main:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000", "--no-server-header", "--no-access-log"]
+    environment:
+      SERVICE_VERSION: "1.7.2"
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      DATABASE_URL: postgresql+asyncpg://orders_svc:${ORDERS_DB_PASSWORD}@postgres:5432/orders
+      # Through toxiproxy, so the link can be faulted like a real network path.
+      PAYMENT_SERVICE_URL: http://toxiproxy:18000
+    mem_limit: 160m
+    memswap_limit: 160m
+    depends_on:
+      postgres:
+        condition: service_healthy
+      toxiproxy:
+        condition: service_healthy
+      payment-service:
+        condition: service_healthy
+
+  user-service:
+    <<: *shop-service
+    command: ["uvicorn", "shop.user_service.main:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000", "--no-server-header", "--no-access-log"]
+    environment:
+      SERVICE_VERSION: "2.3.0"
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      DATABASE_URL: postgresql+asyncpg://users_svc:${USERS_DB_PASSWORD}@postgres:5432/users
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+    mem_limit: 160m
+    memswap_limit: 160m
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  api-gateway:
+    <<: *shop-service
+    command: ["uvicorn", "shop.api_gateway.main:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000", "--no-server-header", "--no-access-log"]
+    environment:
+      SERVICE_VERSION: "3.1.0"
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      USER_SERVICE_URL: http://user-service:8000
+      ORDER_SERVICE_URL: http://order-service:8000
+    # Scenario 5 (bounded memory leak) relies on this limit being reachable.
+    mem_limit: 192m
+    memswap_limit: 192m
+    depends_on:
+      user-service:
+        condition: service_healthy
+      order-service:
+        condition: service_healthy
+
+  frontend:
+    <<: *shop-service
+    command: ["uvicorn", "shop.frontend.main:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000", "--no-server-header", "--no-access-log"]
+    environment:
+      SERVICE_VERSION: "1.0.0"
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      GATEWAY_URL: http://api-gateway:8000
+    ports:
+      - "127.0.0.1:8081:8000"
+    mem_limit: 128m
+    memswap_limit: 128m
+    depends_on:
+      api-gateway:
+        condition: service_healthy
+
+networks:
+  shop:
+
+volumes:
+  pgdata:
