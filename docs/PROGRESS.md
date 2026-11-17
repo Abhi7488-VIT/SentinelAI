@@ -21,7 +21,7 @@ Read at the start of every session. Updated at the end of each phase.
 | T4 Data model + migration | done |
 | T5 Auth | done |
 | T6 Orgs / RBAC / projects | done |
-| T7 Readiness | |
+| T7 Readiness | done |
 | T8 Frontend | |
 | T9 CI | |
 | T10 Docs + report | |
