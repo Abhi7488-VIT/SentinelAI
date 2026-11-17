@@ -1,26 +1,126 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
 
+/* Dark styles only under an explicit .dark class. Phase 1 ships light only, so a user whose OS
+   prefers dark must not get the components' dark: overrides on a light page. */
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * SentinelAI app tokens — "framed sheet" style (see docs/architecture/frontend.md).
+ * One tinted L-frame (sidebar + 48px top bar) and a white sheet inset 8px, 1px edge, no shadow.
+ * The frame is a blue-grey step (the product's face: an observability tool). Colour lives on
+ * data and on the one primary action; chrome stays grey. Light theme only in Phase 1.
+ */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --ground: #f2f5f7;
+  --surface: #ffffff;
+  --raised: #f4f6f8;
+  --active: #e6eaed;
+  --border-soft: #e8eaec;
+  --rule: #f0f1f2;
+  --control: #cdced1;
+  --text: #131416;
+  --text-muted: #5d5f60;
+  --accent-data: #1b6c80;
+  --positive: #1e7b4f;
+  --negative: #c4242a;
+  --pill-neutral-bg: #ebedee;
+  --pill-neutral-ink: #353736;
+  --pill-negative-bg: #ffedea;
+  --pill-negative-ink: #831c1e;
+
+  --radius-sheet: 16px;
+  --sheet-inset: 8px;
+  --sidebar-width: 228px;
+
+  /* shadcn/ui variables mapped onto the tokens above */
+  --background: var(--surface);
+  --foreground: var(--text);
+  --card: var(--surface);
+  --card-foreground: var(--text);
+  --popover: var(--surface);
+  --popover-foreground: var(--text);
+  --primary: #1d1f20;
+  --primary-foreground: #ffffff;
+  --secondary: var(--active);
+  --secondary-foreground: var(--text);
+  --muted: var(--raised);
+  --muted-foreground: var(--text-muted);
+  --accent: var(--raised);
+  --accent-foreground: var(--text);
+  --destructive: var(--negative);
+  --border: var(--border-soft);
+  --input: var(--control);
+  --ring: #8fa6b2;
+  --radius: 0.375rem;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-ground: var(--ground);
+  --color-raised: var(--raised);
+  --color-active: var(--active);
+  --color-rule: var(--rule);
+  --color-control: var(--control);
+  --color-data: var(--accent-data);
+  --color-negative: var(--negative);
+  --color-pill-neutral: var(--pill-neutral-bg);
+  --color-pill-neutral-ink: var(--pill-neutral-ink);
+  --color-pill-negative: var(--pill-negative-bg);
+  --color-pill-negative-ink: var(--pill-negative-ink);
+
+  --font-sans: var(--font-plex-sans), system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, monospace;
+  --font-heading: var(--font-plex-sans), system-ui, sans-serif;
+
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-sheet: var(--radius-sheet);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    background: var(--ground);
+  }
+  body {
+    @apply bg-ground text-foreground font-sans;
+    font-size: 14px;
+    line-height: 20px;
+  }
+  .num {
+    font-variant-numeric: tabular-nums;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
 }
