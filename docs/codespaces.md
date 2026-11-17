@@ -123,9 +123,9 @@ that image has the Yarn apt repository configured, its signing key fails
 fails inside the **docker-in-docker** feature (exit code 100) and Codespaces falls back to the Alpine
 recovery container.
 
-Fixed in `.devcontainer/devcontainer.json`: the base image is now
-`mcr.microsoft.com/devcontainers/base:ubuntu` (no Yarn repo) with Python 3.12, Node LTS and
-Docker-in-Docker added as features. `post-create.sh` also deletes `/etc/apt/sources.list.d/yarn.list`
+Fixed in `.devcontainer/devcontainer.json`: the base image is now a plain Ubuntu devcontainer
+image (no Yarn repo; pinned to `base:ubuntu-22.04`, see the next entry) with Python 3.12, Node LTS
+and Docker-in-Docker added as features. `post-create.sh` also deletes `/etc/apt/sources.list.d/yarn.list`
 before its own `apt-get` calls — this is only defense in depth: features install while the image is
 built, *before* post-create runs, so the image choice is the actual fix.
 
@@ -135,6 +135,27 @@ If a Codespace was created from the broken config, it will not repair itself:
 gh codespace delete -c NAME        # then create it again as in (a)
 # or, inside the codespace: Command Palette -> "Codespaces: Full Rebuild Container"
 ```
+
+### Codespace build fails: `The 'moby' option is not supported on ubuntu 'resolute'`
+
+Seen on 2026-11-17 with the floating tag `mcr.microsoft.com/devcontainers/base:ubuntu`, which had
+moved to Ubuntu "resolute". The creation log says:
+
+```text
+The 'moby' option is not supported on ubuntu 'resolute' because 'moby-cli' and related system
+packages are not available in that distribution. To continue, either set the feature option
+'"moby": false' or use a different base image.
+```
+
+Fixed in `.devcontainer/devcontainer.json` by doing both:
+
+- the image is pinned to `mcr.microsoft.com/devcontainers/base:ubuntu-22.04` (never a floating
+  tag, so a new Ubuntu release cannot change the build under us);
+- the docker-in-docker feature has `"moby": false`, so it installs Docker CE from Docker's own
+  apt repository instead of the distribution's moby packages.
+
+`testbed/tests/unit/test_devcontainer.py` fails if either is undone. As with the previous entry,
+delete the broken Codespace (or run a full rebuild) after pulling the fix.
 
 ### post-create finished with "SKIPPED" steps
 

@@ -23,17 +23,21 @@ def test_host_requirements_are_at_least_4_cpus_and_16gb() -> None:
     assert int(re.fullmatch(r"(\d+)gb", req["memory"]).group(1)) >= 16  # type: ignore[union-attr]
 
 
-def test_base_image_has_no_yarn_repo() -> None:
-    """The python:*-bookworm image ships a Yarn apt repo whose key fails (NO_PUBKEY
-    62D54FD4003F6525), which made the docker-in-docker feature exit 100."""
-    assert DEVCONTAINER["image"] == "mcr.microsoft.com/devcontainers/base:ubuntu"
+def test_base_image_is_pinned_and_has_no_yarn_repo() -> None:
+    """python:*-bookworm ships a Yarn apt repo whose key fails (NO_PUBKEY 62D54FD4003F6525);
+    the floating base:ubuntu tag moved to 'resolute', where moby packages do not exist."""
+    image = DEVCONTAINER["image"]
+    assert image == "mcr.microsoft.com/devcontainers/base:ubuntu-22.04"
+    tag = image.rsplit(":", 1)[1]
+    assert re.fullmatch(r"ubuntu-\d{2}\.\d{2}", tag), f"floating tag: {tag}"
 
 
 def test_tooling_features() -> None:
     features = DEVCONTAINER["features"]
     assert features["ghcr.io/devcontainers/features/python:1"] == {"version": "3.12"}
     assert features["ghcr.io/devcontainers/features/node:1"] == {"version": "lts"}
-    assert "ghcr.io/devcontainers/features/docker-in-docker:2" in features
+    # Docker CE from Docker's own repo, not moby packages from the distribution.
+    assert features["ghcr.io/devcontainers/features/docker-in-docker:2"] == {"moby": False}
 
 
 def test_ports_forwarded_with_labels() -> None:

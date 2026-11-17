@@ -1,6 +1,6 @@
 {
   "name": "SentinelAI (testbed + backend)",
-  "image": "mcr.microsoft.com/devcontainers/base:ubuntu",
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu-22.04",
   "hostRequirements": {
     "cpus": 4,
     "memory": "16gb",
@@ -13,7 +13,9 @@
     "ghcr.io/devcontainers/features/node:1": {
       "version": "lts"
     },
-    "ghcr.io/devcontainers/features/docker-in-docker:2": {}
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {
+      "moby": false
+    }
   },
   "remoteUser": "vscode",
   "remoteEnv": {
