@@ -2,76 +2,106 @@
 
 Read at the start of every session. Updated at the end of each phase.
 
-## Handoff (2026-11-17): laptop → Codespace
+## Phase 2 report (2026-11-17) — testbed
 
-**State.** Branch `phase-2-testbed` is pushed to `origin`, with draft PR #1 into `main`. All 5 CI
-jobs pass on GitHub (latest run `44109971914`). Phase 2 T1–T4 are done; T5 is code-complete; T6–T10
-have not started.
+All live work ran in the Codespace (4 cores, 16 GB; ADR 0004). Branch `phase-2-testbed`; Phase 3 not
+started.
 
-**Verified vs not verified**
-- Verified live (on the laptop, before ADR 0004): Phase 1 stack; Phase 2 T1–T4 (services, chain,
-  OTel → Collector → Prometheus/Loki/Jaeger).
-- Verified on GitHub: CI (backend, frontend, e2e, testbed unit tests, actionlint + shellcheck).
-- **NOT verified:**
-  - T5's 10-minute baseline and deploy round-trip.
-  - `harness/live.py` has never run against a real stack.
-  - `testbed-live.yml` has never been dispatched.
-  - The devcontainer has never built successfully. Fixes `5b18a77` and `9912642` are untested.
+### Implemented
+- **T1–T4** (earlier): five-service shop, deterministic seed (500k orders), OTel → Collector →
+  Prometheus / Loki / Jaeger v2, Grafana on demand.
+- **T5** seeded load generator + mixes, deploy pipeline with deploy events; `harness.live` checks.
+- **T6** fault controller: plugins over allow-listed primitives (traffic mix, Toxiproxy link,
+  named SQL change, ops restart, deploy), Prometheus/Loki/Jaeger symptom checks with saved
+  evidence, run lifecycle with lock, memory guard, stop requests and always-remove-fault, CLI +
+  token-protected HTTP API, ground-truth JSON schema, run records, fingerprints.
+- **T7/T8** five scenarios with definitions, plugins and live-calibrated checks.
+- **T9** same-seed reproducibility runs; `testbed-scenarios.yml`; scenarios in `testbed-live.yml`.
+- **T10** `docs/testbed.md`, `testbed/README.md`, `harness.evidence` (committable run evidence).
 
-**Hardware constraint.**
-- The laptop has 8 GB RAM; WSL is capped at 4 GB.
-- `make testbed-up` drove Windows free memory to 554 MB in 22 s, and Claude Code's low-memory reaper
-  killed background jobs.
-- So: no containers on the laptop. Live runs happen only in a 4-core / 16 GB Codespace or in
-  `testbed-live.yml` (ADR 0004).
+### Verified live (each claim has a run id; records in `docs/evidence/phase-2/`)
+| What | Result | Run ids |
+|---|---|---|
+| 10-min baseline | PASS: 5,958 req, 9.93 req/s, 0 errors, 5/5 complete checkout traces | `20261117T184537Z-c99f0a` |
+| Deploy round-trip | PASS: 1.2.0 → 1.2.1 in 3.1 s, events in Loki, rollback ok | `20261117T154229Z-719b99` |
+| Controller dry run | schema-valid record, fault not injected, 15/15 evidence files present | `20261117T185940Z-8ec55c` |
+| Controller HTTP auth | 401 without / with wrong token, 200 with token | — |
+| S1 `db-pool-exhaustion` | VERIFIED ×3 | `…192849Z-e86599`, `…194200Z-892d6a`, `…210948Z-cbfdb8` |
+| S2 `slow-sql-missing-index` | VERIFIED ×2 (after one failure) | `…204818Z-99e367`, `…212020Z-b68c81` |
+| S3 `failed-deployment-bad-config` | VERIFIED ×2 | `…201435Z-872786`, `…213058Z-58a894` |
+| S4 `payment-unavailable` | VERIFIED ×2 | `…202618Z-2a9db3`, `…214241Z-54338b` |
+| S5 `memory-leak` | VERIFIED ×2 (after one failure) | `…205855Z-b06df8`, `…215313Z-802a22` |
+| Same seed → same pattern | 5/5 pairs equal within tolerance | T9 section; evidence for all 10 runs in `docs/evidence/phase-2/` |
+| Jaeger memory under S1 | peak 266.5 / 384 MiB, 0 restarts | `…194200Z-892d6a` |
 
-**Decisions this session (and why)**
-- **Memory watchdog** (`harness/memguard.py`). The floor is set by `TB_MIN_AVAILABLE_MB`. Defaults:
-  1024 MiB on Linux (`/proc/meminfo` MemAvailable) and 600 MiB on a Windows host (your limit).
-  - `make testbed-up` refuses to start below the floor.
-  - `memguard watch` runs `--on-breach` (testbed-down), stops the command and exits 3.
-  - Why: stop the stack before the host starts swapping or killing processes.
-- **Live checks write evidence files.** Every Prometheus/Loki/Jaeger query and its raw response
-  goes to `testbed/runs/<check>/<run_id>/queries/`. Why: "verified" claims must quote real output
-  (CLAUDE.md invariant 9).
-- **Devcontainer: pinned `base:ubuntu-22.04` with docker-in-docker `"moby": false`.**
-  - The `python:1-3.12-bookworm` image failed on a broken Yarn apt key.
-  - The floating `base:ubuntu` tag moved to "resolute", which has no moby packages.
-  - Never use floating tags here.
-- **`testbed-live.yml` can only be dispatched once the file is on `main`** (GitHub rule for manual
-  workflows). Until the merge, the Codespace is the only way to run live checks.
-- **actionlint runs in CI only.** The laptop's permission classifier blocks running downloaded
-  binaries, and the PyPI wrapper failed with an SSL error.
-- **Open item:** the repository is public, and every commit's author email is a personal address.
-  Hiding it means rewriting history and force-pushing. Not decided.
+### Not verified
+- **`testbed-scenarios.yml` and the scenario path of `testbed-live.yml` have never run on GitHub.**
+  Both pass actionlint/shellcheck locally. Manual dispatch needs the files on `main`; the nightly
+  schedule only fires from the default branch.
+- **Reproducibility on a fresh testbed** (e.g. a CI runner): every run here used one long-running
+  stack. Orders accumulate (each checkout adds one), so S1's 7-day report grows over time and
+  S2's effect depended on recent orders — results on a fresh stack may differ in magnitude.
+- **Fingerprints are equal only at the tolerances in the T9 section; one of them was set after
+  seeing data** (magnitude ±1; see Decisions). At the plan's original ±0, S1's repeat fails.
+- Backend/frontend unchanged since Phase 1 (`git diff origin/main...HEAD -- backend frontend` is
+  empty). This session: backend ruff + mypy clean, 88 DB-free tests pass, 72 DB tests not run
+  (SentinelAI's Postgres is stopped while the testbed runs); frontend not run (no `node_modules`).
+  CI runs both with their services.
+- Grafana (`make testbed-ui`) was not exercised in this session.
 
-**Gotchas**
-- **Testbed frontend is on 8081**, because 8080 is taken on the laptop. Forwarded Codespace ports:
-  8081 shop, 8089 loadgen API, 9090 Prometheus, 3100 Loki, 16686 Jaeger, 3001 Grafana.
-- **Use `127.0.0.1`, not `localhost`**, for host-side URLs: WSL forwards IPv4 only. The live
-  runner's defaults already use 127.0.0.1.
-- **WSL stops its VM, and every container in it,** when no WSL process is attached.
-  `.wslconfig`: `memory=4GB`, `swap=4GB`, `processors=4`, `autoMemoryReclaim=gradual`.
-- **A Codespace built from a broken config does not fix itself.** Delete it and create a new one,
-  or run a full rebuild.
+### Tests
+`make testbed-test`: ruff format + check clean, mypy --strict clean (71 files), **125 passed**
+(5 integration/scenario tests deselected; they need the live stack and were covered by the runs
+above). actionlint 1.7.7: clean.
 
-**Exact next steps**
-1. Delete any failed Codespace, then create a 4-core one on `phase-2-testbed`
-   (`docs/codespaces.md` (a)).
-2. Check the creation log ends with `[post-create] finished: all steps succeeded.`, then run
-   `docker version`.
-3. Run `claude`, sign in, and paste the resume prompt from `docs/codespaces.md` (c).
-4. In that session:
-   - Run `make testbed-up`, then the 10-minute baseline, then `deploy-check`, both under memguard.
-   - Quote the query outputs.
-   - Fix failures and commit "T5 verified live".
-5. Continue T6 → T10 with live evidence for each scenario. Then write the phase report and stop.
-6. Stop the Codespace when idle; delete it when done.
+### Decisions (and why) — plan deviations are marked in `docs/plans/phase-2.md`
+- **Jaeger 384 MiB / 2,000 traces** (plan: 256 MiB / 10,000): 256 MiB restarted mid-fault at both
+  10,000 and 3,000 traces. Testbed limits now total 2,640 MiB long-running.
+- **S2 drops both order-history indexes** (plan: one): with only the composite index gone, p95
+  rose 8 → 10–16 ms because the planner walks `ix_orders_created_at`.
+- **Magnitude tolerance ±1 log2 bucket** (plan: ±0), **set after observing** two S1 runs at 31% and
+  41% peak frontend 5xx (log2 ratios 2.64 / 3.03). A ≥2-bucket (≥4×) difference still fails.
+- **Trace-check onsets excluded from fingerprints**: they are the earliest of the newest 50
+  traces (273 s vs a real 15 s onset).
+- **Trace checks match HTTP status / `error.type`**: Jaeger 2.12's memstore cannot search `error`.
+- **Recovery window 180 s** (plan: 120 s): judged on the second half, which must clear the checks'
+  1-minute lookbacks.
+- **Cross-instance maxima use `max_over_time(...[30s])`**: Prometheus holds a dead instance's last
+  sample for 5 minutes.
+- **S5 stream 45/s** (plan: calibrate to 3–4 min): 20/s grew the gateway 0.26 MiB/s; 45/s →
+  OOM at 196–214 s.
+- **Evidence**: Prometheus/Loki responses committed verbatim; Jaeger as digests with SHA-256 (raw
+  1–2 MB each).
+
+### Known limitations
+- Data drift (above); `make testbed-down CLEAN=1` + `up` resets it.
+- S2's p95 tops out at the histogram's 2.5 s bucket; the true scan time may be higher.
+- Running `make testbed-up` during a scenario kills it without cleanup (documented).
+- Toxiproxy covers one link (order → payment); SQL changes are one named pair.
+- The S3 scenario leaves the release manifest pinned to user-service 2.3.0 (same as the image).
+
+### Files changed this phase (summary)
+`testbed/` (services, harness incl. `controller/` and `evidence.py`, scenarios + schema, infra,
+compose, tests), `.github/workflows/testbed-live.yml`, `.github/workflows/testbed-scenarios.yml`,
+`docs/testbed.md`, `docs/evidence/phase-2/`, `docs/plans/phase-2.md`, ADRs 0003–0004,
+`docs/codespaces.md`, `.devcontainer/`, `Makefile`, this file.
+
+### Remaining / next
+- Merge decision (PR #1) — then dispatch `testbed-scenarios.yml` once to verify CI live.
+- Open item carried from the handoff: commit author emails are personal; hiding them needs a
+  history rewrite. Not decided.
+- **Stop here; Phase 3 waits for your go-ahead.**
+
+### Operational notes
+- Codespace forwarded ports: 8081 shop, 8089 loadgen, 8090 controller, 9090 Prometheus,
+  3100 Loki, 16686 Jaeger, 3001 Grafana. Use `127.0.0.1`, not `localhost`.
+- A Codespace built from a broken config does not fix itself: delete it or run a full rebuild.
+- Never call anything verified that did not run live; stop the Codespace when idle.
 
 | Phase | Status | Notes |
 |---|---|---|
 | 1. Foundation | **Complete, merged to main (2026-11-17)** | Plan: `docs/plans/phase-1.md`. |
-| 2. Testbed | **In progress** (plan approved 2026-11-17) | Plan: `docs/plans/phase-2.md`; ADR 0003 accepted; live verification moved to Codespaces/CI (ADR 0004, `docs/codespaces.md`). |
+| 2. Testbed | **Complete on `phase-2-testbed` (2026-11-17), awaiting review** — not merged | Plan: `docs/plans/phase-2.md`; ADR 0003 accepted; live verification moved to Codespaces/CI (ADR 0004, `docs/codespaces.md`). |
 | 3. Incident management | Not started | |
 | 4. Investigation engine | Not started | |
 | 5. Recovery | Not started | |
@@ -104,8 +134,8 @@ have not started.
 | T6 Controller + ground truth | done — **verified live (2026-11-17)**: controller container healthy; `scenario list/validate` find S1 definition + plugin; HTTP API 401 without/with wrong token, 200 with token; dry run `20261117T185940Z-8ec55c` (S1, seed 42, 120/60/60 s) wrote a run record that validates against `ground-truth.schema.json` (0 errors, checked independently on the host), cites 15 evidence files (all present), fault NOT injected, no S1 symptoms observed, baseline + recovery healthy. 119 unit tests pass |
 | T7 S1 pool exhaustion | done — **verified live (2026-11-17)**: run `20261117T192849Z-e86599` VERIFIED, 9/9 symptoms + 3/3 recovery checks; evidence in `docs/evidence/phase-2/s1-20261117T192849Z-e86599/` and the T7 section below. Jaeger restarted once mid-fault (memory) — fix in the next commit |
 | T8 S2–S5 | done — **verified live (2026-11-17)**: S2 `20261117T204818Z-99e367`, S3 `20261117T201435Z-872786`, S4 `20261117T202618Z-2a9db3`, S5 `20261117T205855Z-b06df8` all VERIFIED; S2 and S5 failed once first (causes + fixes in the T8 section). Evidence: `docs/evidence/phase-2/<scenario>-<run_id>/` |
-| T9 Reproducibility + CI | partial: `testbed-live.yml` (manual live checks) and CI testbed + actionlint jobs added early (ADR 0004); scenario suite and reproducibility still to do |
-| T10 Docs + report | |
+| T9 Reproducibility + CI | done — **verified live**: one same-seed (42) repeat per scenario, all 5 VERIFIED, all 5 fingerprints equal within ±1 onset / ±1 magnitude bucket (T9 section). CI: `testbed-scenarios.yml` (dispatch + nightly, x2 per scenario + compare) and scenario support in `testbed-live.yml` — actionlint-clean, **never run on GitHub** |
+| T10 Docs + report | done — `docs/testbed.md` (scenario sections generated from definitions + verified runs), `testbed/README.md`, this report |
 
 ## Phase 2 — T7 evidence: S1 DB connection-pool exhaustion
 
@@ -212,6 +242,27 @@ Failures on the way (all live, all fixed before the verified runs above):
 - **S4 calibration**: a refused connection records no `http.client.request.duration` sample, so the drafted metric check could never fire; replaced by the order-service ERROR log line and `error.type=ConnectError` client spans.
 - **S3 calibration**: api-gateway answers 503 (not 502) when user-service is down; frontend answers 502.
 - **S5 calibration**: 20 unique URLs/s grew api-gateway 0.26 MiB/s (~13 kB per cached URL, ~8 min to the limit); raised to 45/s → 0.64–0.66 MiB/s, OOM at 205–214 s.
+
+## Phase 2 — T9 evidence: same seed → same symptom pattern
+
+Each scenario's verified run was repeated once with seed 42 and compared with
+`python -m harness.controller compare` (tolerance: ±1 onset bucket of 15 s, ±1 log2 magnitude
+bucket; trace checks contribute magnitude only). Cells are `onset/magnitude` buckets, `-` = not
+applicable.
+
+| scenario | reference run | repeat run | repeat verdict | fingerprint (ref → repeat): onset bucket / magnitude bucket per symptom | differences |
+|---|---|---|---|---|---|
+| `db-pool-exhaustion` | `20261117T194200Z-892d6a` | `20261117T210948Z-cbfdb8` | verified | frontend-5xx 2/3→1/2; frontend-error-traces -/3→-/3; gateway-error-traces -/3→-/3; order-5xx-share 2/1→2/1; order-error-traces -/3→-/3; order-pool-pending 1/-→1/-; order-pool-saturated 1/0→1/0; order-pool-timeout-logs 0/-→0/-; payment-unaffected 0/-→0/- | none |
+| `slow-sql-missing-index` | `20261117T204818Z-99e367` | `20261117T212020Z-b68c81` | verified | account-p95-slow 1/4→1/4; orders-no-error-spike 0/-→0/-; orders-p95-slow 1/4→1/4; orders-slow-select-spans -/3→-/3 | none |
+| `failed-deployment-bad-config` | `20261117T201435Z-872786` | `20261117T213058Z-58a894` | verified | bad-deploy-event 0/-→0/-; catalogue-unaffected 0/-→0/-; frontend-account-5xx 1/2→1/2; gateway-auth-5xx 3/1→3/1; gateway-auth-error-traces -/3→-/3; user-instance-churn 0/2→1/2; user-startup-failure-logs 0/-→1/- | none |
+| `payment-unavailable` | `20261117T202618Z-2a9db3` | `20261117T214241Z-54338b` | verified | browsing-unaffected 0/-→0/-; checkout-5xx 3/1→2/1; order-checkout-error-traces -/3→-/3; order-payment-connect-error-spans -/3→-/3; order-payment-unavailable-logs 0/-→0/-; payment-no-traffic 4/-→4/- | none |
+| `memory-leak` | `20261117T205855Z-b06df8` | `20261117T215313Z-802a22` | verified | frontend-5xx-blip 15/0→14/0; gateway-memory-growth 2/1→2/1; gateway-near-limit 12/0→12/0; gateway-restarted 14/-→13/-; order-service-unaffected 0/-→0/- | none |
+
+The same pairs at stricter tolerances (recomputed from the records):
+- magnitude ±0 (the plan's original): **S1 fails** (`frontend-5xx` bucket 3 vs 2: peaks of 40.7% vs
+  39.5%, either side of the 40% bucket boundary); S2–S5 equal.
+- onset ±0 and magnitude ±0: only S2 is identical; S1, S3, S5 differ in 2 symptoms and S4 in 1,
+  each by one 15 s onset bucket (and S1's magnitude bucket).
 
 ## Phase 1 summary
 
