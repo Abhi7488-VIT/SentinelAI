@@ -81,7 +81,7 @@ style (`docs/architecture/frontend.md`).
 ## Environment notes
 - **No containers on the laptop (from 2026-11-17, ADR 0004).** 8 GB host: starting the testbed drove
   Windows available memory to 554 MB in 22 s. Live checks run in a Codespace or the
-  `testbed-live` workflow only.
+  `testbed-live` workflow only (how-to: `docs/codespaces.md`).
 - Docker runs inside WSL2 Ubuntu. WSL stops the VM when no WSL process is attached, which takes the
   containers down with it. Keep a WSL terminal open (or `wsl -d Ubuntu -- sleep infinity`) while
   using the stack; services have `restart: unless-stopped` and come back when the VM starts.
