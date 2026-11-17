@@ -49,10 +49,17 @@ def get_request_meta(request: Request) -> RequestMeta:
 RequestMetaDep = Annotated[RequestMeta, Depends(get_request_meta)]
 
 
+def get_rate_limiter(redis: Annotated[Redis, Depends(get_redis)]) -> RateLimiter:
+    return RateLimiter(redis)
+
+
+RateLimiterDep = Annotated[RateLimiter, Depends(get_rate_limiter)]
+
+
 def get_auth_service(
-    session: SessionDep, settings: SettingsDep, redis: Annotated[Redis, Depends(get_redis)]
+    session: SessionDep, settings: SettingsDep, limiter: RateLimiterDep
 ) -> AuthService:
-    return AuthService(session, settings, RateLimiter(redis))
+    return AuthService(session, settings, limiter)
 
 
 AuthServiceDep = Annotated[AuthService, Depends(get_auth_service)]

@@ -20,7 +20,7 @@ Read at the start of every session. Updated at the end of each phase.
 | T3 Compose stack | done |
 | T4 Data model + migration | done |
 | T5 Auth | done |
-| T6 Orgs / RBAC / projects | |
+| T6 Orgs / RBAC / projects | done |
 | T7 Readiness | |
 | T8 Frontend | |
 | T9 CI | |

@@ -36,11 +36,12 @@ async def keyset_page[M: Base](
     *,
     limit: int,
     cursor: str | None,
+    id_column: str = "id",
 ) -> tuple[list[M], str | None]:
-    """Run `stmt` ordered by (created_at DESC, id DESC) with an opaque keyset cursor."""
+    """Run `stmt` ordered by (created_at DESC, <id_column> DESC) with an opaque keyset cursor."""
     limit = max(1, min(limit, MAX_LIMIT))
     created_col = model.__table__.c["created_at"]
-    id_col = model.__table__.c["id"]
+    id_col = model.__table__.c[id_column]
     if cursor is not None:
         position = decode_cursor(cursor)
         stmt = stmt.where(
@@ -53,7 +54,7 @@ async def keyset_page[M: Base](
     if len(rows) > limit:
         rows = rows[:limit]
         last = rows[-1]
-        next_cursor = encode_cursor(last.created_at, last.id)  # type: ignore[attr-defined]
+        next_cursor = encode_cursor(last.created_at, getattr(last, id_column))  # type: ignore[attr-defined]
     return rows, next_cursor
 
 
@@ -66,6 +67,8 @@ def _cursor_id(position: Cursor, id_col: ColumnElement[Any]) -> uuid.UUID | int:
 
 class TenantRepository[M: Base]:
     model: ClassVar[type[Base]]
+    # Column identifying a row within the tenant (and the keyset tie-breaker).
+    id_column: ClassVar[str] = "id"
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         super().__init_subclass__(**kwargs)
@@ -89,7 +92,7 @@ class TenantRepository[M: Base]:
         return select(self._model).where(self._org_col() == self.ctx.org_id)
 
     async def get(self, id_: uuid.UUID) -> M | None:
-        stmt = self.scoped().where(self._model.__table__.c["id"] == id_)
+        stmt = self.scoped().where(self._model.__table__.c[self.id_column] == id_)
         return (await self.session.scalars(stmt)).first()
 
     async def add(self, obj: M) -> M:
@@ -113,7 +116,9 @@ class TenantRepository[M: Base]:
         stmt = self.scoped()
         for clause in where:
             stmt = stmt.where(clause)
-        return await keyset_page(self.session, stmt, self._model, limit=limit, cursor=cursor)
+        return await keyset_page(
+            self.session, stmt, self._model, limit=limit, cursor=cursor, id_column=self.id_column
+        )
 
     def _assert_owned(self, obj: M) -> None:
         if obj.org_id != self.ctx.org_id:  # type: ignore[attr-defined]
