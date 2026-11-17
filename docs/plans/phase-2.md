@@ -141,7 +141,7 @@ Separate Compose project (`name: sentinelai-testbed`, own network). Every port i
 grow into the 4 GB swap: a container that reaches its limit is OOM-killed inside its own cgroup and the
 host is never at risk. Grafana is **off by default** (`ui` profile). Short retention: Prometheus
 `retention.time=6h` + `retention.size=300MB`; Loki 6 h (compactor retention); Jaeger in-memory capped at
-3,000 traces (revised from 10,000 during T7, 2026-11-17: measured ~235 MiB at 10,000 baseline traces and restarts under S1; see `testbed/infra/jaeger/jaeger.yaml`).
+2,000 traces in a 384 MB container (revised during T7, 2026-11-17: measured ~235 MiB at 10,000 baseline traces, and restarts under S1 at both 10,000 and 3,000 traces in 256 MB; see `testbed/infra/jaeger/jaeger.yaml`).
 
 | Container | Host port | Mem limit |
 |---|---|---|
@@ -156,7 +156,7 @@ host is never at risk. Grafana is **off by default** (`ui` profile). Short reten
 | otel-collector | 4318 | 192 MB |
 | prometheus | 9090 | 256 MB |
 | loki | 3100 | 256 MB |
-| jaeger (v2, in-memory, capped traces) | 16686 | 256 MB |
+| jaeger (v2, in-memory, capped traces) | 16686 | 384 MB (was 256; raised in T7 after live OOM restarts) |
 | grafana (profile `ui`) | 3001 | 160 MB |
 
 The limits sum to about 2.9 GB (3.1 GB with Grafana); real usage is expected well below and will be
@@ -217,7 +217,7 @@ One Python package, `testbed/harness`, exposed two ways: the CLI `tb scenario ru
 | # | Id | Reproducible trigger | Root cause (category · service) | Expected symptoms (each a query in the definition) | Stop |
 |---|---|---|---|---|---|
 | 1 | `db-pool-exhaustion` | Loadgen adds a seeded stream of `/internal/reports/daily` calls. The report holds its DB session open while it aggregates in Python, about 4 s each. | resource_exhaustion · order-service (DB connection pool) | `db_client_connection_pending_requests{service="order-service"} > 0` sustained; pool timeouts in logs (`QueuePool limit … timed out`); order-service 5xx share > 20%; error spans `order-service` → gateway → frontend; payment-service unaffected | Traffic pattern back to baseline |
-| 2 | `slow-sql-missing-index` | `DROP INDEX ix_orders_user_id_created_at` (the order-history lookup) on the 500k-row table | slow_query · order-service (orders table) | `GET /orders` p95 latency ≥ 5× the run's own baseline p95; the DB span for that SELECT ≥ 10× its baseline and ≥ 25 ms in Jaeger; the frontend's account page slower by the same factor; no error spike | `CREATE INDEX` again; latency back within 1.5× baseline |
+| 2 | `slow-sql-missing-index` | `DROP INDEX ix_orders_user_id_created_at` **and `ix_orders_created_at`** (revised in T8, 2026-11-17: dropping only the first left a fast backward walk of the second; measured p95 8 → 10–16 ms) on the 500k-row table | slow_query · order-service (orders table) | `GET /orders` p95 latency ≥ 5× the run's own baseline p95; the DB span for that SELECT ≥ 10× its baseline and ≥ 25 ms in Jaeger; the frontend's account page slower by the same factor; no error spike | `CREATE INDEX` again; latency back within 1.5× baseline |
 | 3 | `failed-deployment-bad-config` | Deploy user-service 2.4.0, whose config points `USER_DB_NAME` at a database that doesn't exist (`users_v2`). A deploy event is emitted. | bad_deployment · user-service | Deploy event for user-service 2.4.0 in Loki; user-service crash-loops on startup (`database "users_v2" does not exist`); gateway auth calls fail, so login and account pages return 502/503; `service.instance.id` keeps changing | Roll back to 2.3.0 (a second deploy event) |
 | 4 | `payment-unavailable` | Toxiproxy disables the order → payment link (connection refused) | dependency_unavailable · payment-service | order-service client spans to payment-service error with connection refused; checkout 503 via gateway; payment-service request rate drops to 0; browsing unaffected | Re-enable the link |
 | 5 | `memory-leak` (**bounded**) | Loadgen switches part of the traffic to a client that adds a cache-busting `?v=<nonce>` (seeded, fixed rate) to product-list calls. The gateway's response cache has no size bound, so every unique URL is kept. | memory_leak · api-gateway (response cache) | api-gateway `process_memory_usage` rises at a steady, predictable slope; latency creeps up; the container reaches its 192 MB cgroup limit (no swap) in **about 3–4 minutes** and is OOM-killed; restart visible as a new `service.instance.id` and a start log; brief 5xx during the restart | Traffic back to baseline, then gateway restart to free memory (recorded as recovery) |

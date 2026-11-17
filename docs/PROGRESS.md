@@ -103,7 +103,7 @@ have not started.
 | T5 Loadgen + deploy emitter | done — **verified live in Codespace (2026-11-17)**: baseline run `20261117T184537Z-c99f0a` PASS (10 min, 5958 requests, 9.93 req/s, 0 errors = 0.000%, 5/5 settled checkout traces span all five services, all 5 services in Prometheus/Jaeger/Loki); deploy-check run `20261117T154229Z-719b99` PASS (payment-service 1.2.0→1.2.1 in 3.1 s, version label in Prometheus, both deploy events in Loki, rollback ok). First baseline (`20261117T153044Z-ec58e2`) failed: Jaeger was queried before the newest traces were fully exported; fixed by only reading traces that ended ≥ 30 s ago |
 | T6 Controller + ground truth | done — **verified live (2026-11-17)**: controller container healthy; `scenario list/validate` find S1 definition + plugin; HTTP API 401 without/with wrong token, 200 with token; dry run `20261117T185940Z-8ec55c` (S1, seed 42, 120/60/60 s) wrote a run record that validates against `ground-truth.schema.json` (0 errors, checked independently on the host), cites 15 evidence files (all present), fault NOT injected, no S1 symptoms observed, baseline + recovery healthy. 119 unit tests pass |
 | T7 S1 pool exhaustion | done — **verified live (2026-11-17)**: run `20261117T192849Z-e86599` VERIFIED, 9/9 symptoms + 3/3 recovery checks; evidence in `docs/evidence/phase-2/s1-20261117T192849Z-e86599/` and the T7 section below. Jaeger restarted once mid-fault (memory) — fix in the next commit |
-| T8 S2–S5 | |
+| T8 S2–S5 | done — **verified live (2026-11-17)**: S2 `20261117T204818Z-99e367`, S3 `20261117T201435Z-872786`, S4 `20261117T202618Z-2a9db3`, S5 `20261117T205855Z-b06df8` all VERIFIED; S2 and S5 failed once first (causes + fixes in the T8 section). Evidence: `docs/evidence/phase-2/<scenario>-<run_id>/` |
 | T9 Reproducibility + CI | partial: `testbed-live.yml` (manual live checks) and CI testbed + actionlint jobs added early (ADR 0004); scenario suite and reproducibility still to do |
 | T10 Docs + report | |
 
@@ -135,6 +135,83 @@ Notes (honest limits of this run):
 - Jaeger evidence is committed as digests (trace ids, span counts, status codes, SHA-256 of the 1.4–1.9 MB raw response); Prometheus/Loki responses are committed verbatim.
 
 How the run got here (all live, same day): run `…190432Z-3a977d` refused to inject (baseline check counted a single pending=1 connection-open blip; check changed to a 1-min average, which peaked at 0.17 over 50 min of baseline); run `…190723Z-51c4b4` observed 6/9 (Jaeger lost traces in a restart; its memstore cannot search the derived `error` tag, so trace checks now match the 503/502 status; recovery points overlapped the stop, so the default recovery window is now 180 s); run `…192356Z-83833b` was killed 8 s after injection by a `testbed-up` recreate (record left as `running`; traffic verified back on baseline). `scenario stop` crashed on a missing `--seed` (fixed, regression test).
+
+## Phase 2 — T8 evidence: S2–S5
+
+Exact queries: `testbed/scenarios/<id>.json` and `docs/testbed.md`. Raw backend responses: `docs/evidence/phase-2/<id>-<run_id>/queries/` (Jaeger as digests). Calibration was done with short manual injections first (`make scenario-start/stop`), all live.
+
+### S2 slow SQL (missing indexes)
+
+Run `20261117T204818Z-99e367` (seed 42, windows 120/300/180 s): **verified**. Fault 2026-11-17T20:50:18+00:00 → 2026-11-17T20:55:25+00:00.
+
+| phase | check | result | baseline | threshold | peak | onset | points met |
+|---|---|---|---|---|---|---|---|
+| before | `orders-p95-normal` | ok | 0.008896 | 0.05 | 0.009196 | 0.0 s | 9/9 |
+| before | `order-5xx-low` | ok | - | 0.01 | 0 | 0.0 s | 9/9 |
+| during | `orders-p95-slow` | ok | 0.008896 | 0.05 | 2.425 | 15.0 s | 20/21 |
+| during | `account-p95-slow` | ok | 0.04392 | 0.1318 | 2.425 | 15.0 s | 20/21 |
+| during | `orders-slow-select-spans` | ok | - | 5 | 50 | 256.7 s | 50/50 |
+| during | `orders-no-error-spike` | ok | - | 0.01 | 0 | 0.0 s | 21/21 |
+| after | `orders-p95-normal` | ok | 0.008896 | 0.05 | 0.00905 | 0.0 s | 7/7 |
+| after | `order-5xx-low` | ok | - | 0.01 | 0 | 0.0 s | 7/7 |
+
+### S3 failed deployment (bad config)
+
+Run `20261117T201435Z-872786` (seed 42, windows 120/300/180 s): **verified**. Fault 2026-11-17T20:16:36+00:00 → 2026-11-17T20:22:47+00:00.
+
+| phase | check | result | baseline | threshold | peak | onset | points met |
+|---|---|---|---|---|---|---|---|
+| before | `gateway-auth-5xx-low` | ok | - | 0.01 | 0 | 0.0 s | 9/9 |
+| before | `user-service-serving` | ok | - | 0.5 | 4.998 | 0.0 s | 9/9 |
+| during | `bad-deploy-event` | ok | - | 0 | 2 | 9.0 s | 7/7 |
+| during | `user-startup-failure-logs` | ok | - | 0 | 8 | 9.0 s | 24/24 |
+| during | `user-instance-churn` | ok | - | 3 | 12 | 9.0 s | 24/24 |
+| during | `gateway-auth-5xx` | ok | - | 0.5 | 1 | 45.0 s | 21/24 |
+| during | `frontend-account-5xx` | ok | - | 0.2 | 1 | 15.0 s | 23/24 |
+| during | `gateway-auth-error-traces` | ok | - | 5 | 50 | 230.2 s | 50/50 |
+| during | `catalogue-unaffected` | ok | - | 0.01 | 0 | 0.0 s | 24/24 |
+| after | `gateway-auth-5xx-low` | ok | - | 0.01 | 0 | 0.0 s | 7/7 |
+| after | `user-service-serving` | ok | - | 0.5 | 5.218 | 0.0 s | 7/7 |
+
+### S4 payment-service unreachable
+
+Run `20261117T202618Z-2a9db3` (seed 42, windows 120/300/180 s): **verified**. Fault 2026-11-17T20:28:18+00:00 → 2026-11-17T20:33:18+00:00.
+
+| phase | check | result | baseline | threshold | peak | onset | points met |
+|---|---|---|---|---|---|---|---|
+| before | `checkout-5xx-low` | ok | - | 0.01 | 0 | 0.0 s | 9/9 |
+| before | `payment-serving` | ok | - | 0.2 | 0.9997 | 0.0 s | 9/9 |
+| during | `order-payment-unavailable-logs` | ok | - | 0 | 71 | 11.9 s | 21/21 |
+| during | `order-payment-connect-error-spans` | ok | - | 5 | 50 | 244.7 s | 50/50 |
+| during | `checkout-5xx` | ok | - | 0.5 | 1 | 45.0 s | 18/21 |
+| during | `payment-no-traffic` | ok | - | 0.05 | 0.9397 | 60.0 s | 17/21 |
+| during | `order-checkout-error-traces` | ok | - | 5 | 50 | 244.7 s | 50/50 |
+| during | `browsing-unaffected` | ok | - | 0.01 | 0 | 0.0 s | 21/21 |
+| after | `checkout-5xx-low` | ok | - | 0.01 | 0 | 0.0 s | 7/7 |
+| after | `payment-serving` | ok | - | 0.2 | 1.04 | 0.0 s | 7/7 |
+
+### S5 bounded memory leak
+
+Run `20261117T205855Z-b06df8` (seed 42, windows 120/300/180 s): **verified**. Fault 2026-11-17T21:00:56+00:00 → 2026-11-17T21:05:56+00:00.
+
+| phase | check | result | baseline | threshold | peak | onset | points met |
+|---|---|---|---|---|---|---|---|
+| before | `gateway-memory-normal` | ok | 81.3 MiB | 105.7 MiB | 81.3 MiB | 0.0 s | 9/9 |
+| before | `frontend-5xx-low` | ok | - | 0.01 | 0 | 0.0 s | 9/9 |
+| during | `gateway-memory-growth` | ok | - | 2e+05 | 6.564e+05 | 30.0 s | 19/21 |
+| during | `gateway-near-limit` | ok | - | 0.85 | 0.9304 | 180.0 s | 4/21 |
+| during | `gateway-restarted` | ok | - | 0 | 1 | 214.0 s | 4/4 |
+| during | `frontend-5xx-blip` | ok | - | 0.02 | 0.03287 | 225.0 s | 2/21 |
+| during | `order-service-unaffected` | ok | - | 0.01 | 0 | 0.0 s | 21/21 |
+| after | `gateway-memory-normal` | ok | 81.3 MiB | 105.7 MiB | 79.6 MiB | 0.0 s | 7/7 |
+| after | `frontend-5xx-low` | ok | - | 0.01 | 0 | 0.0 s | 7/7 |
+
+Failures on the way (all live, all fixed before the verified runs above):
+- **S2 `20261117T200402Z-658fdf` FAILED**: dropping only `ix_orders_user_id_created_at` (the plan's trigger) raised GET /orders p95 from ~8 ms to only 10–16 ms. The planner walks `ix_orders_created_at` backwards and the load generator's users have many recent orders, so it finds 20 rows almost at once (T2 measured 18–40 ms on seeded users with no recent orders). My earlier 1.6 s estimate came from `EXPLAIN ANALYZE` with all index scans disabled — not what the planner does. Fix: the fault drops both indexes the query can use (`drop-order-history-indexes`); plan §5 updated. Verified run: p95 2.4 s (histogram top bucket; true latency may be higher).
+- **S5 `20261117T203649Z-e3d1dd` FAILED** recovery only (all 5 symptoms observed, OOM at ~205 s): `max(process_memory_usage_bytes)` kept reading the OOM-killed instance's last sample (201 MiB, held by Prometheus for 5 min) while the live instance was at 80 MiB. Fix: `max(max_over_time(...[30s]))` (also for the near-limit ratio).
+- **S4 calibration**: a refused connection records no `http.client.request.duration` sample, so the drafted metric check could never fire; replaced by the order-service ERROR log line and `error.type=ConnectError` client spans.
+- **S3 calibration**: api-gateway answers 503 (not 502) when user-service is down; frontend answers 502.
+- **S5 calibration**: 20 unique URLs/s grew api-gateway 0.26 MiB/s (~13 kB per cached URL, ~8 min to the limit); raised to 45/s → 0.64–0.66 MiB/s, OOM at 205–214 s.
 
 ## Phase 1 summary
 

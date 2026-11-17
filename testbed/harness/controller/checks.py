@@ -210,10 +210,17 @@ def magnitude_bucket(peak: float | None, threshold: float, op: str) -> int | Non
 
 def fingerprint(observations: Sequence[Observation], checks: Sequence[Check]) -> dict[str, Any]:
     ops = {c.id: c.condition.op for c in checks}
+    # A trace check's onset is the earliest of the newest `limit` matching traces, not when the
+    # symptom began (seen live: 273 s vs 15 s for the same fault), so it is left out.
+    trace_checks = {c.id for c in checks if c.backend == "jaeger"}
     symptoms = [
         {
             "id": o.id,
-            "onset_bucket": None if o.onset_s is None else int(o.onset_s // ONSET_BUCKET_S),
+            "onset_bucket": (
+                None
+                if o.onset_s is None or o.id in trace_checks
+                else int(o.onset_s // ONSET_BUCKET_S)
+            ),
             "magnitude_bucket": magnitude_bucket(o.peak, o.threshold, ops.get(o.id, ">")),
         }
         for o in observations
@@ -223,9 +230,15 @@ def fingerprint(observations: Sequence[Observation], checks: Sequence[Check]) ->
 
 
 def compare_fingerprints(
-    a: dict[str, Any], b: dict[str, Any], *, onset_tolerance: int = 1, magnitude_tolerance: int = 0
+    a: dict[str, Any], b: dict[str, Any], *, onset_tolerance: int = 1, magnitude_tolerance: int = 1
 ) -> list[str]:
-    """Differences between two fingerprints (empty = equal within the stated tolerance)."""
+    """Differences between two fingerprints (empty = equal within the stated tolerance).
+
+    Tolerances: onset ±1 bucket (15 s of scheduling jitter); magnitude ±1 log2 bucket. The
+    magnitude tolerance was set to 1 after two same-seed S1 runs peaked at 31% and 41% frontend
+    5xx (log2 ratios 2.64 and 3.03): ±0 fails on bucket-boundary noise, not on a different
+    symptom pattern. A ≥2-bucket difference (a factor of 4 or more) still fails.
+    """
     sa = {s["id"]: s for s in a["symptoms"]}
     sb = {s["id"]: s for s in b["symptoms"]}
     diffs: list[str] = []

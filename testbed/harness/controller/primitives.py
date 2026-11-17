@@ -35,12 +35,19 @@ class SqlChangeDef:
 
 # Named schema changes; the controller never runs SQL that is not listed here.
 SQL_CHANGES: dict[str, SqlChangeDef] = {
-    "drop-order-history-index": SqlChangeDef(
+    # Both indexes the order-history query can use. Dropping only the composite one is not
+    # enough (measured live, T8): the planner walks ix_orders_created_at backwards and, for the
+    # load generator's users (who have many recent orders), finds 20 rows almost at once.
+    "drop-order-history-indexes": SqlChangeDef(
         database="orders",
-        apply="DROP INDEX IF EXISTS ix_orders_user_id_created_at",
+        apply=(
+            "DROP INDEX IF EXISTS ix_orders_user_id_created_at; "
+            "DROP INDEX IF EXISTS ix_orders_created_at"
+        ),
         revert=(
             "CREATE INDEX IF NOT EXISTS ix_orders_user_id_created_at "
-            "ON orders (user_id, created_at DESC)"
+            "ON orders (user_id, created_at DESC); "
+            "CREATE INDEX IF NOT EXISTS ix_orders_created_at ON orders (created_at)"
         ),
     ),
 }
@@ -182,7 +189,12 @@ async def restart_service(ctx: Context, service: str) -> int:
 
 
 async def deploy(
-    ctx: Context, service: str, version: str, config: dict[str, str] | None = None
+    ctx: Context,
+    service: str,
+    version: str,
+    config: dict[str, str] | None = None,
+    *,
+    wait_s: float = 45.0,
 ) -> dict[str, Any]:
     """Release a version through the testbed's deploy pipeline (emits deploy events)."""
     if service not in SERVICES:
@@ -198,7 +210,7 @@ async def deploy(
             manifest_path=ctx.settings.releases_file,
             ops_token=ctx.settings.ops_token,
             sink=sink,
-            wait_s=45.0,
+            wait_s=wait_s,
         )
     finally:
         sink.close()
@@ -208,3 +220,13 @@ async def deploy(
         "status": result.status,
         "previous_version": result.previous_version,
     }
+
+
+def release_of(ctx: Context, service: str) -> tuple[str, dict[str, str]] | None:
+    """The release the manifest pins for a service, or None (it runs its image's version)."""
+    if service not in SERVICES:
+        raise NotAllowedError(f"service {service!r} is not allow-listed")
+    entry = deploy_pipeline.read_manifest(ctx.settings.releases_file)["services"].get(service)
+    if not entry:
+        return None
+    return str(entry["version"]), {str(k): str(v) for k, v in entry.get("config", {}).items()}

@@ -136,14 +136,15 @@ services:
     restart: unless-stopped
     command: ["--config=/etc/jaeger/jaeger.yaml"]
     environment:
-      GOMEMLIMIT: 210MiB
+      GOMEMLIMIT: 320MiB
     volumes:
       - ./infra/jaeger/jaeger.yaml:/etc/jaeger/jaeger.yaml:ro
     ports:
       - "127.0.0.1:16686:16686"
     networks: [shop]
-    mem_limit: 256m
-    memswap_limit: 256m
+    # 384 MiB (plan §2.4 said 256): measured live in T7, 256 MiB restarted under S1.
+    mem_limit: 384m
+    memswap_limit: 384m
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:13133/status"]
       interval: 10s

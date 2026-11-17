@@ -1,0 +1,125 @@
+{
+  "schema_version": 1,
+  "kind": "definition",
+  "id": "memory-leak",
+  "number": 5,
+  "title": "Memory leak in api-gateway's response cache (bounded by its cgroup)",
+  "injected_fault": {
+    "trigger": "traffic mix cache-busting-client",
+    "description": "A client adds a unique, seeded ?v=<nonce> to product-list calls at a fixed rate. api-gateway caches catalogue responses by full URL and never evicts expired entries, so every unique URL stays in memory. The process grows steadily until the container reaches its 192 MB limit (no swap) and is OOM-killed and restarted; it then starts filling again.",
+    "stop": "traffic mix back to baseline, then restart api-gateway to free the cache (part of recovery)"
+  },
+  "root_cause": {
+    "category": "memory_leak",
+    "service": "api-gateway",
+    "component": "catalogue ResponseCache (keyed by full URL, no size bound or eviction)",
+    "summary": "api-gateway's catalogue response cache stores one entry per distinct URL and only overwrites an entry when the same URL is requested again, so a client that varies a query parameter makes it grow without bound until the container is OOM-killed.",
+    "code_location": {
+      "path": "services/shop/api_gateway/cache.py",
+      "symbol": "ResponseCache.put"
+    }
+  },
+  "expected_symptoms": [
+    {
+      "id": "gateway-memory-growth",
+      "signal": "metric",
+      "backend": "prometheus",
+      "description": "api-gateway resident memory grows steadily: over 200 kB/s for 1 minute.",
+      "query": "max(deriv(process_memory_usage_bytes{service_name=\"api-gateway\"}[1m]))",
+      "condition": {
+        "op": ">",
+        "threshold": 200000,
+        "min_points": 4
+      }
+    },
+    {
+      "id": "gateway-near-limit",
+      "signal": "metric",
+      "backend": "prometheus",
+      "description": "The container reaches 85% of its memory limit.",
+      "query": "max(max_over_time(container_memory_usage_bytes{service_name=\"api-gateway\"}[30s]) / max_over_time(container_memory_limit_bytes{service_name=\"api-gateway\"}[30s]))",
+      "condition": {
+        "op": ">",
+        "threshold": 0.85,
+        "min_points": 1
+      }
+    },
+    {
+      "id": "gateway-restarted",
+      "signal": "log",
+      "backend": "loki",
+      "description": "api-gateway restarts (a new instance logs its start).",
+      "query": "sum(count_over_time({service_name=\"api-gateway\"} |= \"service starting\" [1m]))",
+      "condition": {
+        "op": ">",
+        "threshold": 0,
+        "min_points": 1
+      }
+    },
+    {
+      "id": "frontend-5xx-blip",
+      "signal": "metric",
+      "backend": "prometheus",
+      "description": "Users see errors while the gateway is down: frontend 5xx share above 2%.",
+      "query": "(sum(rate(http_server_request_duration_seconds_count{service_name=\"frontend\", http_response_status_code=~\"5..\"}[1m])) or vector(0)) / sum(rate(http_server_request_duration_seconds_count{service_name=\"frontend\"}[1m]))",
+      "condition": {
+        "op": ">",
+        "threshold": 0.02,
+        "min_points": 1
+      }
+    },
+    {
+      "id": "order-service-unaffected",
+      "signal": "metric",
+      "backend": "prometheus",
+      "description": "The cache-miss traffic does not break order-service: its 5xx share stays below 1% throughout (the leak, not a backend, is the cause).",
+      "query": "(sum(rate(http_server_request_duration_seconds_count{service_name=\"order-service\", http_response_status_code=~\"5..\"}[1m])) or vector(0)) / sum(rate(http_server_request_duration_seconds_count{service_name=\"order-service\"}[1m]))",
+      "condition": {
+        "op": "<",
+        "threshold": 0.01,
+        "min_fraction": 1.0
+      }
+    }
+  ],
+  "recovery_checks": [
+    {
+      "id": "gateway-memory-normal",
+      "signal": "metric",
+      "backend": "prometheus",
+      "description": "api-gateway memory back within 1.3x this run's baseline. Only samples from the last 30 s count: an instance that was OOM-killed or restarted keeps its last value in Prometheus for 5 minutes (seen live: a killed instance frozen at 201 MiB while the new one was at 80 MiB).",
+      "query": "max(max_over_time(process_memory_usage_bytes{service_name=\"api-gateway\"}[30s]))",
+      "condition": {
+        "op": "<",
+        "threshold": 1.3,
+        "relative_to_baseline": true,
+        "min_value": 100000000.0,
+        "min_fraction": 1.0
+      }
+    },
+    {
+      "id": "frontend-5xx-low",
+      "signal": "metric",
+      "backend": "prometheus",
+      "description": "frontend 5xx share below 1%.",
+      "query": "(sum(rate(http_server_request_duration_seconds_count{service_name=\"frontend\", http_response_status_code=~\"5..\"}[1m])) or vector(0)) / sum(rate(http_server_request_duration_seconds_count{service_name=\"frontend\"}[1m]))",
+      "condition": {
+        "op": "<",
+        "threshold": 0.01,
+        "min_fraction": 1.0
+      }
+    }
+  ],
+  "expected_affected_services": [
+    "api-gateway",
+    "frontend"
+  ],
+  "unaffected_services": [
+    "order-service",
+    "payment-service",
+    "user-service"
+  ],
+  "timeline": {
+    "started_at": null,
+    "ended_at": null
+  }
+}

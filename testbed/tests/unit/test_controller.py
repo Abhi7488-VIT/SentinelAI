@@ -34,6 +34,7 @@ from harness.controller.primitives import (
     NotAllowedError,
     deploy,
     network_link,
+    release_of,
     restart_service,
     sql_change,
     traffic_pattern,
@@ -128,6 +129,24 @@ def test_fingerprint_and_tolerance() -> None:
     assert compare_fingerprints(fp, later)
     assert compare_fingerprints(fp, {"symptoms": fp["symptoms"][:1]})
     assert magnitude_bucket(100, 1, ">") == 4  # clamped
+    near = copy.deepcopy(fp)
+    near["symptoms"][0]["magnitude_bucket"] = 3  # ±1 log2 bucket: boundary noise
+    assert compare_fingerprints(fp, near) == []
+    near["symptoms"][0]["magnitude_bucket"] = 4  # a factor of 4+ is a different pattern
+    assert compare_fingerprints(fp, near)
+
+
+def test_fingerprint_ignores_trace_check_onsets() -> None:
+    checks = [Check("t", "trace", "jaeger", "", {"service": "x"}, Condition(">=", 5))]
+    trace = {
+        "processes": {"p": {"serviceName": "x"}},
+        "spans": [{"processID": "p", "startTime": (T0 + 270) * 1e6}],
+    }
+    obs = [evaluate_traces("t", [trace] * 50, "x", Condition(">=", 5), T0)]
+    assert obs[0].onset_s == 270.0  # recorded on the observation for the evidence
+    assert fingerprint(obs, checks) == {
+        "symptoms": [{"id": "t", "onset_bucket": None, "magnitude_bucket": 3}]
+    }
 
 
 # ---- ground truth --------------------------------------------------------------------------
@@ -195,7 +214,22 @@ async def test_primitives_refuse_targets_outside_the_allow_list(tmp_path: Path) 
             await restart_service(ctx, "postgres")
         with pytest.raises(NotAllowedError):
             await deploy(ctx, "prometheus", "9.9.9")
+        with pytest.raises(NotAllowedError):
+            release_of(ctx, "postgres")
         assert ctx.steps == []
+
+
+def test_release_of_reads_the_manifest(tmp_path: Path) -> None:
+    manifest = tmp_path / "releases.json"
+    ctx = Context(
+        ControllerSettings(runs_dir=tmp_path, releases_file=manifest), httpx.AsyncClient(), 42
+    )
+    assert release_of(ctx, "user-service") is None  # no manifest: image version
+    manifest.write_text(
+        json.dumps({"services": {"user-service": {"version": "2.4.0", "config": {"A": 1}}}}),
+        encoding="utf-8",
+    )
+    assert release_of(ctx, "user-service") == ("2.4.0", {"A": "1"})
 
 
 def test_controller_is_not_instrumented() -> None:
@@ -503,3 +537,60 @@ def test_cli_start_and_stop_reach_the_service(monkeypatch: pytest.MonkeyPatch) -
         ("start", "db-pool-exhaustion", 7),
         ("stop", "db-pool-exhaustion", None),
     ]
+
+
+def test_relative_recovery_checks_get_the_run_baseline(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Baseline health and recovery evaluate relative checks against the run's own baseline."""
+    import shutil
+
+    from harness.controller.backends import Backends
+
+    scen = tmp_path / "scenarios"
+    shutil.copytree(SCENARIOS, scen)
+    path = scen / "db-pool-exhaustion.json"
+    d = json.loads(path.read_text(encoding="utf-8"))
+    d["recovery_checks"][0]["condition"] = {
+        "op": "<",
+        "threshold": 1.5,
+        "relative_to_baseline": True,
+        "min_value": 0.01,
+        "min_fraction": 1.0,
+    }
+    path.write_text(json.dumps(d), encoding="utf-8")
+    rel_id = d["recovery_checks"][0]["id"]
+
+    async def fake_baseline_of(self: Backends, check: Check, start: float, end: float) -> float:
+        return 7.0
+
+    seen: list[tuple[str, float | None]] = []
+    original = Backends.evaluate
+
+    async def spy(
+        self: Backends, check: Check, start: float, end: float, baseline: float | None = None
+    ) -> Any:
+        if check.id == rel_id:
+            seen.append((check.id, baseline))
+        return await original(self, check, start, end, baseline)
+
+    monkeypatch.setattr(Backends, "baseline_of", fake_baseline_of)
+    monkeypatch.setattr(Backends, "evaluate", spy)
+    import asyncio
+
+    clock = FakeClock()
+    plugin = FakePlugin(clock)
+    run = Run(
+        ControllerSettings(runs_dir=tmp_path / "runs", scenarios_dir=scen),
+        plugin.id,
+        RunOptions(baseline_s=60, observe_s=60, recovery_s=60),
+        plugins={plugin.id: plugin},
+        client=httpx.AsyncClient(transport=fake_backends(d, plugin)),
+        clock=clock,
+        sleep=clock.sleep,
+        meminfo=lambda: 8000,
+    )
+    record = asyncio.run(run.execute())
+    assert seen == [(rel_id, 7.0), (rel_id, 7.0)]  # baseline health, then recovery
+    rec = next(o for o in record["run"]["recovery"] if o["id"] == rel_id)
+    assert rec["threshold"] == 10.5  # 1.5 x 7.0

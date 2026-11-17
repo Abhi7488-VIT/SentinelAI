@@ -230,14 +230,19 @@ class Run:
 
         await self._wait(opt.baseline_s)
         t_trigger = self.clock()
-        baseline_obs = await self._evaluate(backends, self.recovery_checks, t_base, t_trigger)
-        self.run["baseline_checks"] = [o.to_json() for o in baseline_obs]
-        self.run["baseline_healthy"] = all(o.observed for o in baseline_obs)
+        # Relative thresholds (symptoms and recovery checks) are measured on this run's own
+        # baseline window; a symptom and a recovery check may share an id-less query, so the
+        # map is keyed by check id.
         baselines = {
             c.id: await backends.baseline_of(c, t_base, t_trigger)
-            for c in self.symptoms
+            for c in [*self.symptoms, *self.recovery_checks]
             if c.condition.relative_to_baseline
         }
+        baseline_obs = await self._evaluate(
+            backends, self.recovery_checks, t_base, t_trigger, baselines
+        )
+        self.run["baseline_checks"] = [o.to_json() for o in baseline_obs]
+        self.run["baseline_healthy"] = all(o.observed for o in baseline_obs)
         if not self.run["baseline_healthy"]:
             bad = [o.id for o in baseline_obs if not o.observed]
             self.run["status"] = "failed"
@@ -270,7 +275,7 @@ class Run:
         t_end = self.clock()
         self.run["recovery_ended_at"] = iso(t_end)
         recovery = await self._evaluate(
-            backends, self.recovery_checks, t_stop + opt.recovery_s / 2, t_end
+            backends, self.recovery_checks, t_stop + opt.recovery_s / 2, t_end, baselines
         )
         self.run["recovery"] = [o.to_json() for o in recovery]
         ctx.step("recovery", ", ".join(f"{o.id}={'ok' if o.observed else 'NO'}" for o in recovery))

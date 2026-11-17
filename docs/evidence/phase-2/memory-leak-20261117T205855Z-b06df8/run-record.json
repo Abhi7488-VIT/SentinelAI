@@ -1,0 +1,347 @@
+{
+  "schema_version": 1,
+  "kind": "run",
+  "id": "memory-leak",
+  "number": 5,
+  "title": "Memory leak in api-gateway's response cache (bounded by its cgroup)",
+  "injected_fault": {
+    "trigger": "traffic mix cache-busting-client",
+    "description": "A client adds a unique, seeded ?v=<nonce> to product-list calls at a fixed rate. api-gateway caches catalogue responses by full URL and never evicts expired entries, so every unique URL stays in memory. The process grows steadily until the container reaches its 192 MB limit (no swap) and is OOM-killed and restarted; it then starts filling again.",
+    "stop": "traffic mix back to baseline, then restart api-gateway to free the cache (part of recovery)"
+  },
+  "root_cause": {
+    "category": "memory_leak",
+    "service": "api-gateway",
+    "component": "catalogue ResponseCache (keyed by full URL, no size bound or eviction)",
+    "summary": "api-gateway's catalogue response cache stores one entry per distinct URL and only overwrites an entry when the same URL is requested again, so a client that varies a query parameter makes it grow without bound until the container is OOM-killed.",
+    "code_location": {
+      "path": "services/shop/api_gateway/cache.py",
+      "symbol": "ResponseCache.put"
+    }
+  },
+  "expected_symptoms": [
+    {
+      "id": "gateway-memory-growth",
+      "signal": "metric",
+      "backend": "prometheus",
+      "description": "api-gateway resident memory grows steadily: over 200 kB/s for 1 minute.",
+      "query": "max(deriv(process_memory_usage_bytes{service_name=\"api-gateway\"}[1m]))",
+      "condition": {
+        "op": ">",
+        "threshold": 200000,
+        "min_points": 4
+      }
+    },
+    {
+      "id": "gateway-near-limit",
+      "signal": "metric",
+      "backend": "prometheus",
+      "description": "The container reaches 85% of its memory limit.",
+      "query": "max(max_over_time(container_memory_usage_bytes{service_name=\"api-gateway\"}[30s]) / max_over_time(container_memory_limit_bytes{service_name=\"api-gateway\"}[30s]))",
+      "condition": {
+        "op": ">",
+        "threshold": 0.85,
+        "min_points": 1
+      }
+    },
+    {
+      "id": "gateway-restarted",
+      "signal": "log",
+      "backend": "loki",
+      "description": "api-gateway restarts (a new instance logs its start).",
+      "query": "sum(count_over_time({service_name=\"api-gateway\"} |= \"service starting\" [1m]))",
+      "condition": {
+        "op": ">",
+        "threshold": 0,
+        "min_points": 1
+      }
+    },
+    {
+      "id": "frontend-5xx-blip",
+      "signal": "metric",
+      "backend": "prometheus",
+      "description": "Users see errors while the gateway is down: frontend 5xx share above 2%.",
+      "query": "(sum(rate(http_server_request_duration_seconds_count{service_name=\"frontend\", http_response_status_code=~\"5..\"}[1m])) or vector(0)) / sum(rate(http_server_request_duration_seconds_count{service_name=\"frontend\"}[1m]))",
+      "condition": {
+        "op": ">",
+        "threshold": 0.02,
+        "min_points": 1
+      }
+    },
+    {
+      "id": "order-service-unaffected",
+      "signal": "metric",
+      "backend": "prometheus",
+      "description": "The cache-miss traffic does not break order-service: its 5xx share stays below 1% throughout (the leak, not a backend, is the cause).",
+      "query": "(sum(rate(http_server_request_duration_seconds_count{service_name=\"order-service\", http_response_status_code=~\"5..\"}[1m])) or vector(0)) / sum(rate(http_server_request_duration_seconds_count{service_name=\"order-service\"}[1m]))",
+      "condition": {
+        "op": "<",
+        "threshold": 0.01,
+        "min_fraction": 1.0
+      }
+    }
+  ],
+  "recovery_checks": [
+    {
+      "id": "gateway-memory-normal",
+      "signal": "metric",
+      "backend": "prometheus",
+      "description": "api-gateway memory back within 1.3x this run's baseline. Only samples from the last 30 s count: an instance that was OOM-killed or restarted keeps its last value in Prometheus for 5 minutes (seen live: a killed instance frozen at 201 MiB while the new one was at 80 MiB).",
+      "query": "max(max_over_time(process_memory_usage_bytes{service_name=\"api-gateway\"}[30s]))",
+      "condition": {
+        "op": "<",
+        "threshold": 1.3,
+        "relative_to_baseline": true,
+        "min_value": 100000000.0,
+        "min_fraction": 1.0
+      }
+    },
+    {
+      "id": "frontend-5xx-low",
+      "signal": "metric",
+      "backend": "prometheus",
+      "description": "frontend 5xx share below 1%.",
+      "query": "(sum(rate(http_server_request_duration_seconds_count{service_name=\"frontend\", http_response_status_code=~\"5..\"}[1m])) or vector(0)) / sum(rate(http_server_request_duration_seconds_count{service_name=\"frontend\"}[1m]))",
+      "condition": {
+        "op": "<",
+        "threshold": 0.01,
+        "min_fraction": 1.0
+      }
+    }
+  ],
+  "expected_affected_services": [
+    "api-gateway",
+    "frontend"
+  ],
+  "unaffected_services": [
+    "order-service",
+    "payment-service",
+    "user-service"
+  ],
+  "timeline": {
+    "started_at": "2026-11-17T21:00:56+00:00",
+    "ended_at": "2026-11-17T21:05:56+00:00"
+  },
+  "run": {
+    "run_id": "20261117T205855Z-b06df8",
+    "seed": 42,
+    "status": "verified",
+    "mode": "full",
+    "windows": {
+      "baseline_s": 120,
+      "observe_s": 300,
+      "recovery_s": 180
+    },
+    "baseline_started_at": "2026-11-17T20:58:56+00:00",
+    "recovery_ended_at": "2026-11-17T21:08:56+00:00",
+    "baseline_healthy": true,
+    "baseline_checks": [
+      {
+        "id": "gateway-memory-normal",
+        "observed": true,
+        "baseline": 85262336.0,
+        "threshold": 110841036.8,
+        "points": 9,
+        "points_met": 9,
+        "peak": 85274624.0,
+        "onset_s": 0.0,
+        "detail": "9/9 points < 1.108e+08 (needs >= 100% of points)",
+        "evidence": [
+          "002-prometheus.json"
+        ]
+      },
+      {
+        "id": "frontend-5xx-low",
+        "observed": true,
+        "baseline": null,
+        "threshold": 0.01,
+        "points": 9,
+        "points_met": 9,
+        "peak": 0.0,
+        "onset_s": 0.0,
+        "detail": "9/9 points < 0.01 (needs >= 100% of points)",
+        "evidence": [
+          "003-prometheus.json"
+        ]
+      }
+    ],
+    "observed": [
+      {
+        "id": "gateway-memory-growth",
+        "observed": true,
+        "baseline": null,
+        "threshold": 200000.0,
+        "points": 21,
+        "points_met": 19,
+        "peak": 656426.2577519853,
+        "onset_s": 30.0,
+        "detail": "19/21 points > 2e+05 (needs >= 4 consecutive points)",
+        "evidence": [
+          "004-prometheus.json"
+        ]
+      },
+      {
+        "id": "gateway-near-limit",
+        "observed": true,
+        "baseline": null,
+        "threshold": 0.85,
+        "points": 21,
+        "points_met": 4,
+        "peak": 0.9303792317708334,
+        "onset_s": 180.0,
+        "detail": "4/21 points > 0.85 (needs >= 1 consecutive points)",
+        "evidence": [
+          "005-prometheus.json"
+        ]
+      },
+      {
+        "id": "gateway-restarted",
+        "observed": true,
+        "baseline": null,
+        "threshold": 0.0,
+        "points": 4,
+        "points_met": 4,
+        "peak": 1.0,
+        "onset_s": 214.0,
+        "detail": "4/4 points > 0 (needs >= 1 consecutive points)",
+        "evidence": [
+          "006-loki.json"
+        ]
+      },
+      {
+        "id": "frontend-5xx-blip",
+        "observed": true,
+        "baseline": null,
+        "threshold": 0.02,
+        "points": 21,
+        "points_met": 2,
+        "peak": 0.03286953346967146,
+        "onset_s": 225.0,
+        "detail": "2/21 points > 0.02 (needs >= 1 consecutive points)",
+        "evidence": [
+          "007-prometheus.json"
+        ]
+      },
+      {
+        "id": "order-service-unaffected",
+        "observed": true,
+        "baseline": null,
+        "threshold": 0.01,
+        "points": 21,
+        "points_met": 21,
+        "peak": 0.0,
+        "onset_s": 0.0,
+        "detail": "21/21 points < 0.01 (needs >= 100% of points)",
+        "evidence": [
+          "008-prometheus.json"
+        ]
+      }
+    ],
+    "recovery": [
+      {
+        "id": "gateway-memory-normal",
+        "observed": true,
+        "baseline": 85262336.0,
+        "threshold": 110841036.8,
+        "points": 7,
+        "points_met": 7,
+        "peak": 83460096.0,
+        "onset_s": 0.0,
+        "detail": "7/7 points < 1.108e+08 (needs >= 100% of points)",
+        "evidence": [
+          "009-prometheus.json"
+        ]
+      },
+      {
+        "id": "frontend-5xx-low",
+        "observed": true,
+        "baseline": null,
+        "threshold": 0.01,
+        "points": 7,
+        "points_met": 7,
+        "peak": 0.0,
+        "onset_s": 0.0,
+        "detail": "7/7 points < 0.01 (needs >= 100% of points)",
+        "evidence": [
+          "010-prometheus.json"
+        ]
+      }
+    ],
+    "fingerprint": {
+      "symptoms": [
+        {
+          "id": "frontend-5xx-blip",
+          "onset_bucket": 15,
+          "magnitude_bucket": 0
+        },
+        {
+          "id": "gateway-memory-growth",
+          "onset_bucket": 2,
+          "magnitude_bucket": 1
+        },
+        {
+          "id": "gateway-near-limit",
+          "onset_bucket": 12,
+          "magnitude_bucket": 0
+        },
+        {
+          "id": "gateway-restarted",
+          "onset_bucket": 14,
+          "magnitude_bucket": null
+        },
+        {
+          "id": "order-service-unaffected",
+          "onset_bucket": 0,
+          "magnitude_bucket": null
+        }
+      ]
+    },
+    "memory": {
+      "min_available_mb": 10624,
+      "abort_below_mb": 500
+    },
+    "reasons": [],
+    "steps": [
+      {
+        "at": "2026-11-17T20:58:55+00:00",
+        "step": "reset",
+        "detail": "scenario memory-leak (full)"
+      },
+      {
+        "at": "2026-11-17T20:58:56+00:00",
+        "step": "traffic",
+        "detail": "mix=baseline seed=42"
+      },
+      {
+        "at": "2026-11-17T21:00:56+00:00",
+        "step": "baseline",
+        "detail": "healthy: gateway-memory-normal, frontend-5xx-low"
+      },
+      {
+        "at": "2026-11-17T21:00:56+00:00",
+        "step": "traffic",
+        "detail": "mix=cache-busting-client seed=42"
+      },
+      {
+        "at": "2026-11-17T21:05:56+00:00",
+        "step": "observe",
+        "detail": "gateway-memory-growth=yes, gateway-near-limit=yes, gateway-restarted=yes, frontend-5xx-blip=yes, order-service-unaffected=yes"
+      },
+      {
+        "at": "2026-11-17T21:05:56+00:00",
+        "step": "traffic",
+        "detail": "mix=baseline seed=42"
+      },
+      {
+        "at": "2026-11-17T21:05:56+00:00",
+        "step": "restart",
+        "detail": "api-gateway: HTTP 202"
+      },
+      {
+        "at": "2026-11-17T21:08:56+00:00",
+        "step": "recovery",
+        "detail": "gateway-memory-normal=ok, frontend-5xx-low=ok"
+      }
+    ]
+  }
+}
