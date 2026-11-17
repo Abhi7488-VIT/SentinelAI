@@ -3,7 +3,7 @@
 GET  /healthz       liveness
 GET  /stats         current mix, running totals, in-flight, dropped
 GET  /mix           current mix name
-PUT  /mix {"name"}  switch mix (schedules restart from t=0 with the same seed)
+PUT  /mix {"name", "seed"?}  switch mix (schedules restart from t=0; seed optional)
 """
 
 from __future__ import annotations
@@ -24,6 +24,7 @@ from harness.loadgen.runner import LoadGenerator
 
 class MixIn(BaseModel):
     name: str
+    seed: int | None = None  # None keeps the current seed
 
 
 def build_api(gen: LoadGenerator) -> FastAPI:
@@ -44,10 +45,10 @@ def build_api(gen: LoadGenerator) -> FastAPI:
     @api.put("/mix")
     async def set_mix(body: MixIn) -> dict[str, Any]:
         try:
-            gen.set_mix(body.name)
+            gen.set_mix(body.name, seed=body.seed)
         except KeyError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
-        return {"mix": gen.mix.name}
+        return {"mix": gen.mix.name, "seed": gen.seed}
 
     return api
 

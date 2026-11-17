@@ -1,0 +1,216 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sentinelai.local/testbed/ground-truth.schema.json",
+  "title": "Testbed scenario ground truth",
+  "description": "A committed scenario definition (kind=definition, times null) or a runtime record written by the controller (kind=run, times and observations filled in). Never given to SentinelAI (ADR 0003).",
+  "type": "object",
+  "required": [
+    "schema_version", "kind", "id", "title", "injected_fault", "root_cause",
+    "expected_symptoms", "recovery_checks", "expected_affected_services",
+    "unaffected_services", "timeline"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {"const": 1},
+    "kind": {"enum": ["definition", "run"]},
+    "id": {"type": "string", "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"},
+    "number": {"type": "integer", "minimum": 1},
+    "title": {"type": "string", "minLength": 1},
+    "injected_fault": {
+      "type": "object",
+      "required": ["trigger", "description", "stop"],
+      "additionalProperties": false,
+      "properties": {
+        "trigger": {"type": "string", "minLength": 1},
+        "description": {"type": "string", "minLength": 1},
+        "stop": {"type": "string", "minLength": 1}
+      }
+    },
+    "root_cause": {
+      "type": "object",
+      "required": ["category", "service", "component", "summary", "code_location"],
+      "additionalProperties": false,
+      "properties": {
+        "category": {
+          "enum": [
+            "resource_exhaustion", "slow_query", "bad_deployment", "dependency_unavailable",
+            "memory_leak", "cpu_saturation", "error_spike", "latency", "timeout",
+            "auth_failure", "lock_contention", "configuration_error"
+          ]
+        },
+        "service": {"$ref": "#/$defs/service"},
+        "component": {"type": "string", "minLength": 1},
+        "summary": {"type": "string", "minLength": 1},
+        "code_location": {
+          "oneOf": [
+            {"type": "null"},
+            {
+              "type": "object",
+              "required": ["path", "symbol"],
+              "additionalProperties": false,
+              "properties": {
+                "path": {"type": "string", "pattern": "^services/"},
+                "symbol": {"type": "string", "minLength": 1}
+              }
+            }
+          ]
+        }
+      }
+    },
+    "expected_symptoms": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/check"}},
+    "recovery_checks": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/check"}},
+    "expected_affected_services": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/service"}, "uniqueItems": true},
+    "unaffected_services": {"type": "array", "items": {"$ref": "#/$defs/service"}, "uniqueItems": true},
+    "timeline": {
+      "type": "object",
+      "required": ["started_at", "ended_at"],
+      "additionalProperties": false,
+      "properties": {
+        "started_at": {"type": ["string", "null"], "format": "date-time"},
+        "ended_at": {"type": ["string", "null"], "format": "date-time"}
+      }
+    },
+    "run": {"$ref": "#/$defs/run"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"kind": {"const": "definition"}}},
+      "then": {
+        "properties": {"timeline": {"properties": {"started_at": {"type": "null"}, "ended_at": {"type": "null"}}}},
+        "not": {"required": ["run"]}
+      }
+    },
+    {
+      "if": {"properties": {"kind": {"const": "run"}}},
+      "then": {
+        "required": ["run"],
+        "properties": {"timeline": {"properties": {"started_at": {"type": "string"}, "ended_at": {"type": "string"}}}}
+      }
+    }
+  ],
+  "$defs": {
+    "service": {"enum": ["frontend", "api-gateway", "user-service", "order-service", "payment-service"]},
+    "check": {
+      "type": "object",
+      "required": ["id", "signal", "backend", "description", "query", "condition"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {"type": "string", "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"},
+        "signal": {"enum": ["metric", "log", "trace", "event"]},
+        "backend": {"enum": ["prometheus", "loki", "jaeger"]},
+        "description": {"type": "string", "minLength": 1},
+        "query": {
+          "oneOf": [
+            {"type": "string", "minLength": 1},
+            {
+              "type": "object",
+              "required": ["service"],
+              "additionalProperties": false,
+              "properties": {
+                "service": {"$ref": "#/$defs/service"},
+                "operation": {"type": "string"},
+                "tags": {"type": "object", "additionalProperties": {"type": "string"}},
+                "min_duration_ms": {"type": "number", "minimum": 0}
+              }
+            }
+          ]
+        },
+        "condition": {
+          "type": "object",
+          "required": ["op", "threshold"],
+          "additionalProperties": false,
+          "properties": {
+            "op": {"enum": [">", ">=", "<", "<="]},
+            "threshold": {"type": "number"},
+            "relative_to_baseline": {"type": "boolean"},
+            "min_value": {"type": "number"},
+            "min_points": {"type": "integer", "minimum": 1},
+            "min_fraction": {"type": "number", "exclusiveMinimum": 0, "maximum": 1}
+          }
+        }
+      }
+    },
+    "observation": {
+      "type": "object",
+      "required": ["id", "observed", "threshold", "points", "points_met", "peak", "onset_s", "evidence"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {"type": "string"},
+        "observed": {"type": "boolean"},
+        "baseline": {"type": ["number", "null"]},
+        "threshold": {"type": "number"},
+        "points": {"type": "integer", "minimum": 0},
+        "points_met": {"type": "integer", "minimum": 0},
+        "peak": {"type": ["number", "null"]},
+        "onset_s": {"type": ["number", "null"]},
+        "detail": {"type": "string"},
+        "evidence": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "run": {
+      "type": "object",
+      "required": [
+        "run_id", "seed", "status", "mode", "windows", "baseline_healthy", "observed",
+        "recovery", "fingerprint", "reasons", "steps"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "run_id": {"type": "string", "minLength": 1},
+        "seed": {"type": "integer"},
+        "status": {"enum": ["running", "verified", "failed", "aborted", "dry_run", "manual"]},
+        "mode": {"enum": ["full", "dry_run", "manual"]},
+        "windows": {
+          "type": "object",
+          "required": ["baseline_s", "observe_s", "recovery_s"],
+          "additionalProperties": false,
+          "properties": {
+            "baseline_s": {"type": "integer", "minimum": 0},
+            "observe_s": {"type": "integer", "minimum": 0},
+            "recovery_s": {"type": "integer", "minimum": 0}
+          }
+        },
+        "baseline_started_at": {"type": ["string", "null"]},
+        "recovery_ended_at": {"type": ["string", "null"]},
+        "baseline_healthy": {"type": ["boolean", "null"]},
+        "baseline_checks": {"type": "array", "items": {"$ref": "#/$defs/observation"}},
+        "observed": {"type": "array", "items": {"$ref": "#/$defs/observation"}},
+        "recovery": {"type": "array", "items": {"$ref": "#/$defs/observation"}},
+        "fingerprint": {
+          "type": ["object", "null"],
+          "required": ["symptoms"],
+          "additionalProperties": false,
+          "properties": {
+            "symptoms": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["id", "onset_bucket", "magnitude_bucket"],
+                "additionalProperties": false,
+                "properties": {
+                  "id": {"type": "string"},
+                  "onset_bucket": {"type": ["integer", "null"]},
+                  "magnitude_bucket": {"type": ["integer", "null"]}
+                }
+              }
+            }
+          }
+        },
+        "memory": {"type": "object"},
+        "reasons": {"type": "array", "items": {"type": "string"}},
+        "steps": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["at", "step", "detail"],
+            "additionalProperties": false,
+            "properties": {
+              "at": {"type": "string"},
+              "step": {"type": "string"},
+              "detail": {"type": "string"}
+            }
+          }
+        }
+      }
+    }
+  }
+}

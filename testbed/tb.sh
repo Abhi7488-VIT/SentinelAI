@@ -2,7 +2,7 @@
 # SentinelAI testbed workflow. The repo-root Makefile calls this; it also works on its own:
 #   testbed/tb.sh up | ui | down [--clean] | status | logs [service] | test
 #   testbed/tb.sh deploy SERVICE VERSION [KEY=VALUE ...] | loadgen-stats | loadgen-mix NAME
-# Later tasks add: scenario-list | scenario-run | scenario-start | scenario-stop
+#   testbed/tb.sh scenario list | validate | status | run ID [opts] | start ID | stop ID
 set -euo pipefail
 
 TB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -17,7 +17,7 @@ random_secret() {
 }
 
 ensure_env() {
-  if [[ -f "$TB_DIR/.env" ]]; then return; fi
+  if [[ -f "$TB_DIR/.env" ]]; then add_missing_env_keys; return; fi
   log "creating testbed/.env from .env.example with random secrets"
   local line key value
   : > "$TB_DIR/.env"
@@ -30,6 +30,28 @@ ensure_env() {
       printf '%s\n' "$line" >> "$TB_DIR/.env"
     fi
   done < "$TB_DIR/.env.example"
+}
+
+add_missing_env_keys() {
+  # Keys added to .env.example after .env was created get a value (random for secrets).
+  local line key
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    [[ "$line" =~ ^([A-Z_][A-Z0-9_]*)=(.*)$ ]] || continue
+    key="${BASH_REMATCH[1]}"
+    grep -q "^${key}=" "$TB_DIR/.env" && continue
+    if [[ "${BASH_REMATCH[2]}" == change-me* ]]; then
+      printf '%s=%s\n' "$key" "$(random_secret)" >> "$TB_DIR/.env"
+    else
+      printf '%s\n' "$line" >> "$TB_DIR/.env"
+    fi
+    log "added missing key $key to testbed/.env"
+  done < "$TB_DIR/.env.example"
+}
+
+ensure_runs_dir() {
+  # Bind-mounted into the controller and deployer (which run as a non-root user).
+  mkdir -p "$TB_DIR/runs"
+  chmod a+rwx "$TB_DIR/runs" 2>/dev/null || true
 }
 
 warn_if_sentinelai_running() {
@@ -52,6 +74,7 @@ memguard_check() {
 
 cmd_up() {
   ensure_env
+  ensure_runs_dir
   memguard_check
   warn_if_sentinelai_running
   log "building and starting (waits until every service is healthy)"
@@ -80,7 +103,7 @@ cmd_deploy() {
   local args=("$service" "$version")
   local kv
   for kv in "$@"; do args+=(--config "$kv"); done
-  mkdir -p "$TB_DIR/runs"
+  ensure_runs_dir
   "${COMPOSE[@]}" --profile tools run --rm --no-deps deployer "${args[@]}"
 }
 
@@ -93,6 +116,12 @@ loadgen_api() {
     curl -fsS -X "$method" "http://127.0.0.1:8089$path"
   fi
   echo
+}
+
+cmd_scenario() {
+  # Runs inside the controller container, so it reaches the testbed network directly.
+  [[ $# -ge 1 ]] || die "usage: tb.sh scenario list | validate | status | run ID [--seed N] [--observe S] ... | start ID | stop ID"
+  "${COMPOSE[@]}" exec -T controller python -m harness.controller "$@"
 }
 
 cmd_status() {
@@ -127,8 +156,9 @@ main() {
     test) cmd_test ;;
     deploy) cmd_deploy "$@" ;;
     loadgen-stats) loadgen_api GET /stats ;;
+    scenario) cmd_scenario "$@" ;;
     loadgen-mix) loadgen_api PUT /mix "{\"name\": \"${1:?usage: tb.sh loadgen-mix NAME}\"}" ;;
-    *) die "usage: tb.sh up | ui | down [--clean] | status | logs [service] | test | deploy | loadgen-stats | loadgen-mix" ;;
+    *) die "usage: tb.sh up | ui | down [--clean] | status | logs [service] | test | deploy | scenario | loadgen-stats | loadgen-mix" ;;
   esac
 }
 

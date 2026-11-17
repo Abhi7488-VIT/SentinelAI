@@ -1,0 +1,122 @@
+{
+  "schema_version": 1,
+  "kind": "definition",
+  "id": "db-pool-exhaustion",
+  "number": 1,
+  "title": "DB connection-pool exhaustion in order-service",
+  "injected_fault": {
+    "trigger": "traffic mix with-weekly-reports",
+    "description": "An internal job starts calling order-service GET /internal/reports/sales?days=7 at a fixed, seeded rate. The report keeps its database connection checked out while it streams the week's orders and calls payment-service once per chunk, so concurrent reports hold most of order-service's 10-connection pool (overflow 0, 3 s checkout timeout). Normal requests then wait for a connection and time out.",
+    "stop": "traffic mix back to baseline (the report job stops)"
+  },
+  "root_cause": {
+    "category": "resource_exhaustion",
+    "service": "order-service",
+    "component": "database connection pool (orders DB, pool_size 10, max_overflow 0, timeout 3 s)",
+    "summary": "The weekly sales report holds a pooled DB connection for its whole run, including one payment-service call per 500-order chunk; a steady stream of reports keeps the pool exhausted, so other order-service requests time out waiting for a connection (503) and the errors propagate to api-gateway and frontend.",
+    "code_location": {"path": "services/shop/order_service/main.py", "symbol": "sales_report"}
+  },
+  "expected_symptoms": [
+    {
+      "id": "order-pool-pending",
+      "signal": "metric",
+      "backend": "prometheus",
+      "description": "Requests queue for a connection: order-service pending checkouts > 0, sustained for 2 minutes.",
+      "query": "max(max_over_time(db_client_connection_pending_requests{service_name=\"order-service\"}[30s]))",
+      "condition": {"op": ">", "threshold": 0, "min_points": 8}
+    },
+    {
+      "id": "order-pool-saturated",
+      "signal": "metric",
+      "backend": "prometheus",
+      "description": "All 10 pool connections in use, sustained for 2 minutes.",
+      "query": "max(max_over_time(db_client_connection_count{service_name=\"order-service\", db_client_connection_state=\"used\"}[30s]))",
+      "condition": {"op": ">=", "threshold": 10, "min_points": 8}
+    },
+    {
+      "id": "order-pool-timeout-logs",
+      "signal": "log",
+      "backend": "loki",
+      "description": "order-service error logs: timed out waiting for a database connection from the pool.",
+      "query": "sum(count_over_time({service_name=\"order-service\"} |= \"Timed out waiting for a database connection\" [1m]))",
+      "condition": {"op": ">", "threshold": 0, "min_points": 4}
+    },
+    {
+      "id": "order-5xx-share",
+      "signal": "metric",
+      "backend": "prometheus",
+      "description": "More than 20% of order-service responses are 5xx, for at least 1 minute.",
+      "query": "(sum(rate(http_server_request_duration_seconds_count{service_name=\"order-service\", http_response_status_code=~\"5..\"}[1m])) or vector(0)) / sum(rate(http_server_request_duration_seconds_count{service_name=\"order-service\"}[1m]))",
+      "condition": {"op": ">", "threshold": 0.2, "min_points": 4}
+    },
+    {
+      "id": "frontend-5xx",
+      "signal": "metric",
+      "backend": "prometheus",
+      "description": "The errors reach users: frontend 5xx share above 5% for at least 1 minute.",
+      "query": "(sum(rate(http_server_request_duration_seconds_count{service_name=\"frontend\", http_response_status_code=~\"5..\"}[1m])) or vector(0)) / sum(rate(http_server_request_duration_seconds_count{service_name=\"frontend\"}[1m]))",
+      "condition": {"op": ">", "threshold": 0.05, "min_points": 4}
+    },
+    {
+      "id": "order-error-traces",
+      "signal": "trace",
+      "backend": "jaeger",
+      "description": "Traces with error spans in order-service.",
+      "query": {"service": "order-service", "tags": {"error": "true"}},
+      "condition": {"op": ">=", "threshold": 5}
+    },
+    {
+      "id": "gateway-error-traces",
+      "signal": "trace",
+      "backend": "jaeger",
+      "description": "The same failures as error spans in api-gateway.",
+      "query": {"service": "api-gateway", "tags": {"error": "true"}},
+      "condition": {"op": ">=", "threshold": 5}
+    },
+    {
+      "id": "frontend-error-traces",
+      "signal": "trace",
+      "backend": "jaeger",
+      "description": "And in frontend, the user-facing edge.",
+      "query": {"service": "frontend", "tags": {"error": "true"}},
+      "condition": {"op": ">=", "threshold": 5}
+    },
+    {
+      "id": "payment-unaffected",
+      "signal": "metric",
+      "backend": "prometheus",
+      "description": "payment-service is not the cause: its 5xx share stays below 1% throughout.",
+      "query": "(sum(rate(http_server_request_duration_seconds_count{service_name=\"payment-service\", http_response_status_code=~\"5..\"}[1m])) or vector(0)) / sum(rate(http_server_request_duration_seconds_count{service_name=\"payment-service\"}[1m]))",
+      "condition": {"op": "<", "threshold": 0.01, "min_fraction": 1.0}
+    }
+  ],
+  "recovery_checks": [
+    {
+      "id": "order-pool-idle",
+      "signal": "metric",
+      "backend": "prometheus",
+      "description": "No requests waiting for an order-service DB connection.",
+      "query": "max(max_over_time(db_client_connection_pending_requests{service_name=\"order-service\"}[30s]))",
+      "condition": {"op": "<", "threshold": 1, "min_fraction": 1.0}
+    },
+    {
+      "id": "order-5xx-low",
+      "signal": "metric",
+      "backend": "prometheus",
+      "description": "order-service 5xx share below 1%.",
+      "query": "(sum(rate(http_server_request_duration_seconds_count{service_name=\"order-service\", http_response_status_code=~\"5..\"}[1m])) or vector(0)) / sum(rate(http_server_request_duration_seconds_count{service_name=\"order-service\"}[1m]))",
+      "condition": {"op": "<", "threshold": 0.01, "min_fraction": 1.0}
+    },
+    {
+      "id": "frontend-5xx-low",
+      "signal": "metric",
+      "backend": "prometheus",
+      "description": "frontend 5xx share below 1%.",
+      "query": "(sum(rate(http_server_request_duration_seconds_count{service_name=\"frontend\", http_response_status_code=~\"5..\"}[1m])) or vector(0)) / sum(rate(http_server_request_duration_seconds_count{service_name=\"frontend\"}[1m]))",
+      "condition": {"op": "<", "threshold": 0.01, "min_fraction": 1.0}
+    }
+  ],
+  "expected_affected_services": ["order-service", "api-gateway", "frontend"],
+  "unaffected_services": ["payment-service", "user-service"],
+  "timeline": {"started_at": null, "ended_at": null}
+}

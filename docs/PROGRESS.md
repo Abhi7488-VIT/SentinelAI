@@ -101,7 +101,7 @@ have not started.
 | T3 Telemetry + Collector | done |
 | T4 Backends | done |
 | T5 Loadgen + deploy emitter | done — **verified live in Codespace (2026-11-17)**: baseline run `20261117T184537Z-c99f0a` PASS (10 min, 5958 requests, 9.93 req/s, 0 errors = 0.000%, 5/5 settled checkout traces span all five services, all 5 services in Prometheus/Jaeger/Loki); deploy-check run `20261117T154229Z-719b99` PASS (payment-service 1.2.0→1.2.1 in 3.1 s, version label in Prometheus, both deploy events in Loki, rollback ok). First baseline (`20261117T153044Z-ec58e2`) failed: Jaeger was queried before the newest traces were fully exported; fixed by only reading traces that ended ≥ 30 s ago |
-| T6 Controller + ground truth | |
+| T6 Controller + ground truth | done — **verified live (2026-11-17)**: controller container healthy; `scenario list/validate` find S1 definition + plugin; HTTP API 401 without/with wrong token, 200 with token; dry run `20261117T185940Z-8ec55c` (S1, seed 42, 120/60/60 s) wrote a run record that validates against `ground-truth.schema.json` (0 errors, checked independently on the host), cites 15 evidence files (all present), fault NOT injected, no S1 symptoms observed, baseline + recovery healthy. 119 unit tests pass |
 | T7 S1 pool exhaustion | |
 | T8 S2–S5 | |
 | T9 Reproducibility + CI | partial: `testbed-live.yml` (manual live checks) and CI testbed + actionlint jobs added early (ADR 0004); scenario suite and reproducibility still to do |

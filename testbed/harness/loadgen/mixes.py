@@ -36,8 +36,25 @@ BASELINE_WEIGHTS: dict[Action, float] = {
     "checkout": 10,
 }
 
+# Scenario mixes: baseline user traffic plus one extra fixed-rate stream. Stream rates are
+# calibrated live (docs/testbed.md) so the fault produces its symptoms within the observe window.
+WEEKLY_REPORT_RPS = 4.0  # S1: GET /internal/reports/sales?days=7 per second
+CACHE_BUSTING_RPS = 20.0  # S5: unique product-list URLs per second
+
 MIXES: dict[str, Mix] = {
     "baseline": Mix(name="baseline", rps=10.0, weights=BASELINE_WEIGHTS),
+    "with-weekly-reports": Mix(
+        name="with-weekly-reports",
+        rps=10.0,
+        weights=BASELINE_WEIGHTS,
+        streams=(Stream("internal_report", WEEKLY_REPORT_RPS, {"days": "7"}),),
+    ),
+    "cache-busting-client": Mix(
+        name="cache-busting-client",
+        rps=10.0,
+        weights=BASELINE_WEIGHTS,
+        streams=(Stream("catalogue_nonce", CACHE_BUSTING_RPS),),
+    ),
 }
 
 

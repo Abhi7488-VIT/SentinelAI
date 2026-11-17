@@ -64,12 +64,21 @@ def create_service_app(
     @asynccontextmanager
     async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         logger.info("service starting", extra={"service.version": settings.service_version})
+        started = False
         try:
             if lifespan is None:
+                started = True
                 yield
             else:
                 async with lifespan(app):
+                    started = True
                     yield
+        except Exception as exc:
+            # Logged here, while the telemetry pipeline is still up (uvicorn would only log it
+            # after shutdown, when nothing is exported any more).
+            if not started:
+                logger.exception("service failed to start: %s", exc)
+            raise
         finally:
             logger.info("service stopped")
             telemetry.shutdown()

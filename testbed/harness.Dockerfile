@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
-# Harness image: load generator, deploy pipeline (and, from T6, the fault controller).
-# Only testbed/harness/ (and later testbed/scenarios/) is copied; the services' code is not
-# needed here. Build-context exclusions are in harness.Dockerfile.dockerignore.
+# Harness image: load generator, deploy pipeline and the fault controller.
+# Only testbed/harness/ and testbed/scenarios/ (ground truth) are copied; the services' code is
+# not needed here. Build-context exclusions are in harness.Dockerfile.dockerignore.
 
 FROM ghcr.io/astral-sh/uv:0.13.8 AS uv
 
@@ -27,4 +27,5 @@ ENV PATH=/opt/venv/bin:$PATH \
 WORKDIR /app
 COPY --from=builder /opt/venv /opt/venv
 COPY --chown=app:app harness ./harness
+COPY --chown=app:app scenarios ./scenarios
 USER app

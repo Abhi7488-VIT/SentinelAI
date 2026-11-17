@@ -64,8 +64,10 @@ class LoadGenerator:
 
     # ---- mix control ---------------------------------------------------------------------
 
-    def set_mix(self, name: str) -> Mix:
+    def set_mix(self, name: str, seed: int | None = None) -> Mix:
         mix = get_mix(name)  # raises KeyError for unknown mixes
+        if seed is not None:
+            self.seed = seed
         for task in self._schedulers:
             task.cancel()
         self.mix = mix

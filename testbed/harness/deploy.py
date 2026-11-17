@@ -109,6 +109,10 @@ class EventSink:
         )
 
     def close(self) -> None:
+        # Long-lived callers (the controller) create one sink per deploy: detach the handler
+        # so later deploys are not also sent to this (shut down) provider.
+        if self._handler is not None:
+            logger.removeHandler(self._handler)
         if self._provider is not None:
             self._provider.force_flush()
             self._provider.shutdown()

@@ -379,6 +379,43 @@ services:
       frontend:
         condition: service_healthy
 
+  controller:
+    # Fault-injection controller (docs/testbed.md). CLI: `make scenario-run ID=...` (runs inside
+    # this container); HTTP on 127.0.0.1:8090 with CONTROLLER_TOKEN. No Docker socket: it acts
+    # through loadgen, Toxiproxy, Postgres and the services' ops endpoints only.
+    build:
+      context: .
+      dockerfile: harness.Dockerfile
+    image: sentinelai-testbed-harness:dev
+    restart: unless-stopped
+    command: ["python", "-m", "harness.controller", "serve", "--port", "8090"]
+    environment:
+      CONTROLLER_TOKEN: ${CONTROLLER_TOKEN:?set CONTROLLER_TOKEN}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      OPS_TOKEN: ${OPS_TOKEN:?set OPS_TOKEN}
+      SEED: ${SEED:-42}
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      RELEASES_FILE: /releases/releases.json
+      RUNS_DIR: /runs
+      SCENARIOS_DIR: /app/scenarios
+    volumes:
+      - releases:/releases
+      - ./runs:/runs
+    ports:
+      - "127.0.0.1:8090:8090"
+    networks: [shop]
+    mem_limit: 128m
+    memswap_limit: 128m
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8090/healthz', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
+    depends_on:
+      loadgen:
+        condition: service_healthy
+
   deployer:
     # One-shot deploy pipeline: `make deploy SERVICE=... VERSION=...`
     profiles: [tools]
