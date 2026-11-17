@@ -58,6 +58,9 @@ class ServiceSettings(BaseSettings):
     # Releases manifest written by the deploy pipeline (absent = use env SERVICE_VERSION)
     releases_file: Path = Path("/releases/releases.json")
 
+    # Token the deploy pipeline presents to POST /ops/restart. Unset = endpoint disabled.
+    ops_token: SecretStr | None = None
+
     # Telemetry (wired in T3). Unset = telemetry export disabled.
     otel_exporter_otlp_endpoint: str | None = None
 

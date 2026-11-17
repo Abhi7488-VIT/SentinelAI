@@ -57,7 +57,7 @@ strict = true
 plugins = ["pydantic.mypy"]
 mypy_path = "services"
 explicit_package_bases = true
-files = ["services", "tests"]
+files = ["services", "harness", "tests"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

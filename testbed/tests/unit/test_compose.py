@@ -53,7 +53,7 @@ def test_every_compose_variable_is_in_env_example() -> None:
 def test_env_example_has_placeholders_only() -> None:
     example = (TESTBED / ".env.example").read_text(encoding="utf-8")
     for line in example.splitlines():
-        if re.match(r"^[A-Z_]*PASSWORD=", line):
+        if re.match(r"^[A-Z_]*(PASSWORD|TOKEN)=", line):
             assert line.split("=", 1)[1].startswith("change-me"), line
 
 
@@ -64,3 +64,9 @@ def test_service_image_excludes_harness_and_scenarios() -> None:
     dockerfile = (TESTBED / "Dockerfile").read_text(encoding="utf-8")
     copies = [ln for ln in dockerfile.splitlines() if ln.startswith("COPY") and "--from" not in ln]
     assert all("harness" not in ln and "scenarios" not in ln for ln in copies)
+
+
+def test_harness_image_excludes_the_services_code() -> None:
+    """The harness image needs none of the system under test (and vice versa)."""
+    ignored = (TESTBED / "harness.Dockerfile.dockerignore").read_text(encoding="utf-8").split()
+    assert {"services", "tests", "runs"} <= set(ignored)

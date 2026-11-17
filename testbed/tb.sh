@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # SentinelAI testbed workflow. The repo-root Makefile calls this; it also works on its own:
 #   testbed/tb.sh up | ui | down [--clean] | status | logs [service] | test
-# Later tasks add: scenario-list | scenario-run | scenario-start | scenario-stop | deploy
+#   testbed/tb.sh deploy SERVICE VERSION [KEY=VALUE ...] | loadgen-stats | loadgen-mix NAME
+# Later tasks add: scenario-list | scenario-run | scenario-start | scenario-stop
 set -euo pipefail
 
 TB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -65,6 +66,27 @@ cmd_down() {
   fi
 }
 
+cmd_deploy() {
+  [[ $# -ge 2 ]] || die "usage: tb.sh deploy SERVICE VERSION [KEY=VALUE ...]"
+  local service="$1" version="$2"; shift 2
+  local args=("$service" "$version")
+  local kv
+  for kv in "$@"; do args+=(--config "$kv"); done
+  mkdir -p "$TB_DIR/runs"
+  "${COMPOSE[@]}" --profile tools run --rm --no-deps deployer "${args[@]}"
+}
+
+# Load generator control API (published on 127.0.0.1:8089).
+loadgen_api() {
+  local method="$1" path="$2" body="${3:-}"
+  if [[ -n "$body" ]]; then
+    curl -fsS -X "$method" -H 'Content-Type: application/json' -d "$body" "http://127.0.0.1:8089$path"
+  else
+    curl -fsS -X "$method" "http://127.0.0.1:8089$path"
+  fi
+  echo
+}
+
 cmd_status() {
   "${COMPOSE[@]}" ps -a --format 'table {{.Service}}\t{{.Status}}\t{{.Ports}}'
 }
@@ -94,7 +116,10 @@ main() {
     status) cmd_status ;;
     logs) cmd_logs "$@" ;;
     test) cmd_test ;;
-    *) die "usage: tb.sh up | ui | down [--clean] | status | logs [service] | test" ;;
+    deploy) cmd_deploy "$@" ;;
+    loadgen-stats) loadgen_api GET /stats ;;
+    loadgen-mix) loadgen_api PUT /mix "{\"name\": \"${1:?usage: tb.sh loadgen-mix NAME}\"}" ;;
+    *) die "usage: tb.sh up | ui | down [--clean] | status | logs [service] | test | deploy | loadgen-stats | loadgen-mix" ;;
   esac
 }
 

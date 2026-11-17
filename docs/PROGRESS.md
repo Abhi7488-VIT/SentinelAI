@@ -5,7 +5,7 @@ Read at the start of every session. Updated at the end of each phase.
 | Phase | Status | Notes |
 |---|---|---|
 | 1. Foundation | **Complete, merged to main (2026-11-17)** | Plan: `docs/plans/phase-1.md`. |
-| 2. Testbed | **In progress** (plan approved 2026-11-17) | Plan: `docs/plans/phase-2.md`; ADR 0003 accepted. |
+| 2. Testbed | **In progress** (plan approved 2026-11-17) | Plan: `docs/plans/phase-2.md`; ADR 0003 accepted; live verification moved to Codespaces/CI (ADR 0004, `docs/codespaces.md`). |
 | 3. Incident management | Not started | |
 | 4. Investigation engine | Not started | |
 | 5. Recovery | Not started | |
@@ -34,7 +34,7 @@ Read at the start of every session. Updated at the end of each phase.
 | T2 Services | done |
 | T3 Telemetry + Collector | done |
 | T4 Backends | done |
-| T5 Loadgen + deploy emitter | |
+| T5 Loadgen + deploy emitter | code committed — **unit-tested only; live baseline and deploy round-trip NOT yet verified** (laptop cannot run the testbed; to be verified in Codespaces/CI, ADR 0004) |
 | T6 Controller + ground truth | |
 | T7 S1 pool exhaustion | |
 | T8 S2–S5 | |
@@ -79,6 +79,9 @@ style (`docs/architecture/frontend.md`).
   report 0).
 
 ## Environment notes
+- **No containers on the laptop (from 2026-11-17, ADR 0004).** 8 GB host: starting the testbed drove
+  Windows available memory to 554 MB in 22 s. Live checks run in a Codespace or the
+  `testbed-live` workflow only.
 - Docker runs inside WSL2 Ubuntu. WSL stops the VM when no WSL process is attached, which takes the
   containers down with it. Keep a WSL terminal open (or `wsl -d Ubuntu -- sleep infinity`) while
   using the stack; services have `restart: unless-stopped` and come back when the VM starts.

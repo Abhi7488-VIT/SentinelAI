@@ -15,6 +15,24 @@ SentinelAI itself is not changed in this phase except for docs.
 | Ports | Free: 3001, 3100, 4317, 4318, 8081–8090, 8474, 9090, 16686. **8080 is taken** (red-blue-range). | Testbed frontend on 8081. |
 | `make` | GNU Make 4.3 installed in WSL. | Makefile targets run from WSL; `testbed/tb.sh` is kept as the single implementation and fallback. |
 
+### 0.1 Hardware constraint and verification plan (added 2026-11-17, ADR 0004)
+
+The laptop (8 GB RAM, WSL capped at 4 GB) **cannot run the testbed live**: the idle WSL VM costs
+~700 MB, and within 22 s of `make testbed-up` it grew to ~1.6 GB while Windows' available memory fell
+to 554 MB (floor 600 MB); the memory watchdog stopped the run. Therefore:
+
+- **No containers run on the laptop.** Local work: editing, unit tests, ruff, mypy strict.
+- **All live verification runs in a GitHub Codespace (4-core / 16 GB) or GitHub Actions**:
+  `.devcontainer/devcontainer.json` and the manual workflow `.github/workflows/testbed-live.yml`
+  (checks: `baseline`, `deploy-check`, then scenarios 1–5 as they land). Each run uploads its run
+  record and Prometheus/Loki/Jaeger query outputs as artifacts; those are the evidence quoted in
+  reports.
+- The memory watchdog is configurable (`TB_MIN_AVAILABLE_MB`); on Linux it reads `/proc/meminfo`
+  `MemAvailable` with a 1 GB default floor.
+- **Status vocabulary:** a task is "done" only after its live check passes in a Codespace or CI.
+  Until then it is "unit-tested only; NOT yet verified live". T5 is in that state.
+- Instructions for the Codespace session: `docs/codespaces.md`.
+
 ---
 
 ## 1. Scope
@@ -274,7 +292,7 @@ Same bar as Phase 1: format, lint, mypy strict, tests and build with real output
 | **T6** Controller + ground truth | plugin interface, primitives, symptom checks, CLI + HTTP, schema, runtime records, lock, allow-list | lifecycle, idempotency, allow-list, schema validation, every scenario has a valid file | dry run writes a schema-valid record |
 | **T7** S1 pool exhaustion | trigger + definition + checks | scenario test (marked, about 8 min): verified + baseline restored | output of every query, before/during/after |
 | **T8** S2–S5 | four scenarios | scenario test each | same |
-| **T9** Reproducibility + CI | fingerprint comparison; CI: testbed lint/type/unit per push, scenario suite on `workflow_dispatch` + nightly | same-seed fingerprint test per scenario | fingerprints equal within the stated tolerance |
+| **T9** Reproducibility + CI (note: the live-check workflow `testbed-live.yml` was pulled forward, ADR 0004) | fingerprint comparison; CI: testbed lint/type/unit per push, scenario suite on `workflow_dispatch` + nightly | same-seed fingerprint test per scenario | fingerprints equal within the stated tolerance |
 | **T10** Docs + report | `docs/testbed.md` (each scenario's trigger, expected symptoms with exact queries, ground truth), `testbed/README.md`, PROGRESS | — | phase report with real outputs |
 
 ---

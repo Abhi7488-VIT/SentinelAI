@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
+import asyncio
+import hmac
 import logging
+import os
+import signal
 from collections.abc import AsyncIterator, Callable
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Header, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from opentelemetry import trace
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
@@ -96,6 +100,17 @@ def create_service_app(
         _mark_span_error(exc)
         logger.exception("unhandled error: %s", type(exc).__name__)
         return error_response(500, "internal_error", "Internal server error.")
+
+    @app.post("/ops/restart", include_in_schema=False, status_code=202)
+    async def restart(x_ops_token: str | None = Header(default=None)) -> Response:
+        """Used by the deploy pipeline: exit after replying; the container restarts on the
+        release now in the manifest. Excluded from tracing (operational, not product traffic)."""
+        expected = settings.ops_token.get_secret_value() if settings.ops_token else None
+        if not expected or not x_ops_token or not hmac.compare_digest(x_ops_token, expected):
+            return error_response(403, "forbidden", "Not allowed.")
+        logger.info("restart requested by the deploy pipeline")
+        asyncio.get_running_loop().call_later(0.2, os.kill, os.getpid(), signal.SIGTERM)
+        return Response(status_code=202)
 
     @app.get("/healthz", response_model=Health, include_in_schema=False)
     async def healthz() -> Health:
