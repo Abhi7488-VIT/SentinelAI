@@ -112,3 +112,34 @@ gh run download                  # evidence: testbed/runs/ (run record, query ou
 ```
 
 The job summary shows the result table; the artifact holds every query and its raw response.
+
+## Troubleshooting
+
+### Codespace build fails: `NO_PUBKEY 62D54FD4003F6525` (dl.yarnpkg.com), then an Alpine "recovery" container
+
+Seen on 2026-11-17 with the old image `mcr.microsoft.com/devcontainers/python:1-3.12-bookworm`:
+that image has the Yarn apt repository configured, its signing key fails
+(`GPG error: dl.yarnpkg.com/debian stable InRelease: NO_PUBKEY 62D54FD4003F6525`), so `apt-get update`
+fails inside the **docker-in-docker** feature (exit code 100) and Codespaces falls back to the Alpine
+recovery container.
+
+Fixed in `.devcontainer/devcontainer.json`: the base image is now
+`mcr.microsoft.com/devcontainers/base:ubuntu` (no Yarn repo) with Python 3.12, Node LTS and
+Docker-in-Docker added as features. `post-create.sh` also deletes `/etc/apt/sources.list.d/yarn.list`
+before its own `apt-get` calls — this is only defense in depth: features install while the image is
+built, *before* post-create runs, so the image choice is the actual fix.
+
+If a Codespace was created from the broken config, it will not repair itself:
+
+```bash
+gh codespace delete -c NAME        # then create it again as in (a)
+# or, inside the codespace: Command Palette -> "Codespaces: Full Rebuild Container"
+```
+
+### post-create finished with "SKIPPED" steps
+
+Optional steps (backend dependencies, the Claude Code CLI) never fail the setup; the end of the
+creation log lists what was skipped. Re-run them from the repository root, for example
+`(cd backend && uv sync --locked)` or `npm install -g @anthropic-ai/claude-code`. Required steps
+(`make`, `uv`, testbed dependencies) do fail the setup; see the creation log
+(Command Palette -> "Codespaces: View Creation Log").
