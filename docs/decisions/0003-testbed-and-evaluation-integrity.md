@@ -28,7 +28,7 @@ invariant 9).
    evaluation.
 4. **Separate deployment.** The testbed is its own Compose project and network. The chaos controller
    has no Docker socket and acts only on an allow-list of testbed targets.
-5. **Guards as tests.** A grep over `testbed/app/` and a content check over emitted telemetry fail
+5. **Guards as tests.** A grep over `testbed/services/` and a content check over emitted telemetry fail
    the build if tell-tale words (fault, chaos, inject, scenario, ground truth) appear.
 
 ## Alternatives considered
