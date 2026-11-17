@@ -2,6 +2,72 @@
 
 Read at the start of every session. Updated at the end of each phase.
 
+## Handoff (2026-11-17): laptop → Codespace
+
+**State.** Branch `phase-2-testbed` is pushed to `origin`, with draft PR #1 into `main`. All 5 CI
+jobs pass on GitHub (latest run `44109971914`). Phase 2 T1–T4 are done; T5 is code-complete; T6–T10
+have not started.
+
+**Verified vs not verified**
+- Verified live (on the laptop, before ADR 0004): Phase 1 stack; Phase 2 T1–T4 (services, chain,
+  OTel → Collector → Prometheus/Loki/Jaeger).
+- Verified on GitHub: CI (backend, frontend, e2e, testbed unit tests, actionlint + shellcheck).
+- **NOT verified:**
+  - T5's 10-minute baseline and deploy round-trip.
+  - `harness/live.py` has never run against a real stack.
+  - `testbed-live.yml` has never been dispatched.
+  - The devcontainer has never built successfully. Fixes `5b18a77` and `9912642` are untested.
+
+**Hardware constraint.**
+- The laptop has 8 GB RAM; WSL is capped at 4 GB.
+- `make testbed-up` drove Windows free memory to 554 MB in 22 s, and Claude Code's low-memory reaper
+  killed background jobs.
+- So: no containers on the laptop. Live runs happen only in a 4-core / 16 GB Codespace or in
+  `testbed-live.yml` (ADR 0004).
+
+**Decisions this session (and why)**
+- **Memory watchdog** (`harness/memguard.py`). The floor is set by `TB_MIN_AVAILABLE_MB`. Defaults:
+  1024 MiB on Linux (`/proc/meminfo` MemAvailable) and 600 MiB on a Windows host (your limit).
+  - `make testbed-up` refuses to start below the floor.
+  - `memguard watch` runs `--on-breach` (testbed-down), stops the command and exits 3.
+  - Why: stop the stack before the host starts swapping or killing processes.
+- **Live checks write evidence files.** Every Prometheus/Loki/Jaeger query and its raw response
+  goes to `testbed/runs/<check>/<run_id>/queries/`. Why: "verified" claims must quote real output
+  (CLAUDE.md invariant 9).
+- **Devcontainer: pinned `base:ubuntu-22.04` with docker-in-docker `"moby": false`.**
+  - The `python:1-3.12-bookworm` image failed on a broken Yarn apt key.
+  - The floating `base:ubuntu` tag moved to "resolute", which has no moby packages.
+  - Never use floating tags here.
+- **`testbed-live.yml` can only be dispatched once the file is on `main`** (GitHub rule for manual
+  workflows). Until the merge, the Codespace is the only way to run live checks.
+- **actionlint runs in CI only.** The laptop's permission classifier blocks running downloaded
+  binaries, and the PyPI wrapper failed with an SSL error.
+- **Open item:** the repository is public, and every commit's author email is a personal address.
+  Hiding it means rewriting history and force-pushing. Not decided.
+
+**Gotchas**
+- **Testbed frontend is on 8081**, because 8080 is taken on the laptop. Forwarded Codespace ports:
+  8081 shop, 8089 loadgen API, 9090 Prometheus, 3100 Loki, 16686 Jaeger, 3001 Grafana.
+- **Use `127.0.0.1`, not `localhost`**, for host-side URLs: WSL forwards IPv4 only. The live
+  runner's defaults already use 127.0.0.1.
+- **WSL stops its VM, and every container in it,** when no WSL process is attached.
+  `.wslconfig`: `memory=4GB`, `swap=4GB`, `processors=4`, `autoMemoryReclaim=gradual`.
+- **A Codespace built from a broken config does not fix itself.** Delete it and create a new one,
+  or run a full rebuild.
+
+**Exact next steps**
+1. Delete any failed Codespace, then create a 4-core one on `phase-2-testbed`
+   (`docs/codespaces.md` (a)).
+2. Check the creation log ends with `[post-create] finished: all steps succeeded.`, then run
+   `docker version`.
+3. Run `claude`, sign in, and paste the resume prompt from `docs/codespaces.md` (c).
+4. In that session:
+   - Run `make testbed-up`, then the 10-minute baseline, then `deploy-check`, both under memguard.
+   - Quote the query outputs.
+   - Fix failures and commit "T5 verified live".
+5. Continue T6 → T10 with live evidence for each scenario. Then write the phase report and stop.
+6. Stop the Codespace when idle; delete it when done.
+
 | Phase | Status | Notes |
 |---|---|---|
 | 1. Foundation | **Complete, merged to main (2026-11-17)** | Plan: `docs/plans/phase-1.md`. |
@@ -23,7 +89,7 @@ Read at the start of every session. Updated at the end of each phase.
 | T6 Orgs / RBAC / projects | done |
 | T7 Readiness | done |
 | T8 Frontend | done |
-| T9 CI | done (validated locally; no GitHub remote yet) |
+| T9 CI | done (validated locally; first GitHub run green on PR #1, 2026-11-17) |
 | T10 Docs + report | done |
 
 ## Phase 2 task log
@@ -62,7 +128,7 @@ the org shell); shadcn/ui (Base UI flavour) with the CLI as a dev dependency; "f
 style (`docs/architecture/frontend.md`).
 
 **Known limitations / carried forward:**
-- CI has never run on GitHub (no remote). Backend and frontend jobs were reproduced in clean Linux
+- (Resolved 2026-11-17: CI now runs on GitHub and is green on PR #1.) Originally: backend and frontend jobs were reproduced in clean Linux
   containers; the e2e job's steps were run by hand against the stack.
 - No email flows: no verification, reset or invitations. Register (409) and add-member-by-email
   reveal whether an account exists; both are rate-limited.
