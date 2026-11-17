@@ -16,7 +16,7 @@ Read at the start of every session. Updated at the end of each phase.
 | Task | Status |
 |---|---|
 | T1 Repo skeleton | done |
-| T2 Backend core | |
+| T2 Backend core | done |
 | T3 Compose stack | |
 | T4 Data model + migration | |
 | T5 Auth | |
