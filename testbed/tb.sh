@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # SentinelAI testbed workflow. The repo-root Makefile calls this; it also works on its own:
-#   testbed/tb.sh up | down [--clean] | status | logs [service] | test
+#   testbed/tb.sh up | ui | down [--clean] | status | logs [service] | test
 # Later tasks add: scenario-list | scenario-run | scenario-start | scenario-stop | deploy
 set -euo pipefail
 
@@ -50,12 +50,18 @@ cmd_up() {
   cmd_status
 }
 
+cmd_ui() {
+  log "starting Grafana (profile ui) on http://127.0.0.1:3001 (anonymous viewer)"
+  "${COMPOSE[@]}" --profile ui up -d --wait --wait-timeout 180 grafana
+}
+
 cmd_down() {
+  # --profile ui so an on-demand Grafana is stopped too.
   if [[ "${1:-}" == "--clean" ]]; then
     log "stopping and deleting testbed data"
-    "${COMPOSE[@]}" down -v
+    "${COMPOSE[@]}" --profile ui down -v
   else
-    "${COMPOSE[@]}" down
+    "${COMPOSE[@]}" --profile ui down
   fi
 }
 
@@ -83,11 +89,12 @@ main() {
   local cmd="${1:-}"; shift || true
   case "$cmd" in
     up) cmd_up ;;
+    ui) cmd_ui ;;
     down) cmd_down "$@" ;;
     status) cmd_status ;;
     logs) cmd_logs "$@" ;;
     test) cmd_test ;;
-    *) die "usage: tb.sh up | down [--clean] | status | logs [service] | test" ;;
+    *) die "usage: tb.sh up | ui | down [--clean] | status | logs [service] | test" ;;
   esac
 }
 

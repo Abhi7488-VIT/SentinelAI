@@ -1,0 +1,22 @@
+# Overlay: also send every signal to SentinelAI's OTLP/HTTP ingest endpoint (Phase 3).
+# Loaded only when SENTINELAI_OTLP_ENDPOINT is set (see the collector command in
+# docker-compose.yml). Pipelines are restated in full because list values replace on merge.
+
+exporters:
+  otlphttp/sentinelai:
+    endpoint: ${env:SENTINELAI_OTLP_ENDPOINT}
+    retry_on_failure:
+      enabled: true
+      max_elapsed_time: 120s
+    sending_queue:
+      enabled: true
+      queue_size: 2000
+
+service:
+  pipelines:
+    traces:
+      exporters: [otlphttp/jaeger, otlphttp/sentinelai]
+    metrics:
+      exporters: [otlphttp/prometheus, otlphttp/sentinelai]
+    logs:
+      exporters: [otlphttp/loki, otlphttp/sentinelai]

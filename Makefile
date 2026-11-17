@@ -3,10 +3,11 @@
 
 TB := ./testbed/tb.sh
 
-.PHONY: help testbed-up testbed-down testbed-status testbed-logs testbed-test
+.PHONY: help testbed-up testbed-ui testbed-down testbed-status testbed-logs testbed-test
 
 help:
 	@echo "testbed-up                 build + start the testbed, wait until healthy"
+	@echo "testbed-ui                 start Grafana (off by default) on 127.0.0.1:3001"
 	@echo "testbed-down [CLEAN=1]     stop the testbed (CLEAN=1 also deletes its data)"
 	@echo "testbed-status             show testbed containers"
 	@echo "testbed-logs [SERVICE=x]   follow logs"
@@ -14,6 +15,9 @@ help:
 
 testbed-up:
 	@$(TB) up
+
+testbed-ui:
+	@$(TB) ui
 
 testbed-down:
 	@$(TB) down $(if $(CLEAN),--clean,)

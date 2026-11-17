@@ -33,7 +33,7 @@ Read at the start of every session. Updated at the end of each phase.
 | T1 Skeleton (uv project, compose, limits, Makefile + tb.sh) | done |
 | T2 Services | done |
 | T3 Telemetry + Collector | done |
-| T4 Backends | |
+| T4 Backends | done |
 | T5 Loadgen + deploy emitter | |
 | T6 Controller + ground truth | |
 | T7 S1 pool exhaustion | |

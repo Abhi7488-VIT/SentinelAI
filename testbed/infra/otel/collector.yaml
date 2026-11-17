@@ -1,7 +1,7 @@
 # OpenTelemetry Collector for the testbed.
-# Receives OTLP from the shop services and fans out to the backends (added in T4).
-# The SentinelAI exporter lives in collector.sentinelai.yaml and is only loaded when
-# SENTINELAI_OTLP_ENDPOINT is set (Phase 3).
+# Receives OTLP from the shop services and fans out: traces -> Jaeger, metrics -> Prometheus,
+# logs -> Loki (all over OTLP/HTTP). The SentinelAI exporter lives in collector.sentinelai.yaml
+# and is only loaded when SENTINELAI_OTLP_ENDPOINT is set (Phase 3).
 
 extensions:
   health_check:
@@ -26,6 +26,13 @@ processors:
     send_batch_size: 1024
 
 exporters:
+  otlphttp/jaeger:
+    endpoint: http://jaeger:4318
+  otlphttp/prometheus:
+    endpoint: http://prometheus:9090/api/v1/otlp
+  otlphttp/loki:
+    endpoint: http://loki:3100/otlp
+  # Not in any pipeline by default; add it to a pipeline when debugging.
   debug:
     verbosity: ${env:COLLECTOR_DEBUG_VERBOSITY:-basic}
 
@@ -38,12 +45,12 @@ service:
     traces:
       receivers: [otlp]
       processors: [memory_limiter, batch]
-      exporters: [debug]
+      exporters: [otlphttp/jaeger]
     metrics:
       receivers: [otlp]
       processors: [memory_limiter, batch]
-      exporters: [debug]
+      exporters: [otlphttp/prometheus]
     logs:
       receivers: [otlp]
       processors: [memory_limiter, batch]
-      exporters: [debug]
+      exporters: [otlphttp/loki]

@@ -1,0 +1,19 @@
+# Prometheus for the testbed. Metrics arrive by OTLP push from the Collector
+# (--web.enable-otlp-receiver); nothing is scraped. Retention is set on the command line (6h).
+
+global:
+  evaluation_interval: 15s
+
+otlp:
+  # Copy these resource attributes onto every series as labels (service_name, ...).
+  promote_resource_attributes:
+    - service.name
+    - service.namespace
+    - service.version
+    - service.instance.id
+    - deployment.environment.name
+
+storage:
+  tsdb:
+    # Points can arrive a little late through the Collector's batching.
+    out_of_order_time_window: 2m
