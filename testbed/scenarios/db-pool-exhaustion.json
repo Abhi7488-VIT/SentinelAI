@@ -61,24 +61,24 @@
       "id": "order-error-traces",
       "signal": "trace",
       "backend": "jaeger",
-      "description": "Traces with error spans in order-service.",
-      "query": {"service": "order-service", "tags": {"error": "true"}},
+      "description": "Traces with a 503 (pool timeout) server span in order-service. Matched on the HTTP status: the spans also carry error=true, but Jaeger 2.12's in-memory store does not search that derived tag (verified live).",
+      "query": {"service": "order-service", "tags": {"http.response.status_code": "503"}},
       "condition": {"op": ">=", "threshold": 5}
     },
     {
       "id": "gateway-error-traces",
       "signal": "trace",
       "backend": "jaeger",
-      "description": "The same failures as error spans in api-gateway.",
-      "query": {"service": "api-gateway", "tags": {"error": "true"}},
+      "description": "The same failures in api-gateway, which answers 502 when order-service fails.",
+      "query": {"service": "api-gateway", "tags": {"http.response.status_code": "502"}},
       "condition": {"op": ">=", "threshold": 5}
     },
     {
       "id": "frontend-error-traces",
       "signal": "trace",
       "backend": "jaeger",
-      "description": "And in frontend, the user-facing edge.",
-      "query": {"service": "frontend", "tags": {"error": "true"}},
+      "description": "And in frontend, the user-facing edge (502).",
+      "query": {"service": "frontend", "tags": {"http.response.status_code": "502"}},
       "condition": {"op": ">=", "threshold": 5}
     },
     {
@@ -95,8 +95,8 @@
       "id": "order-pool-idle",
       "signal": "metric",
       "backend": "prometheus",
-      "description": "No requests waiting for an order-service DB connection.",
-      "query": "max(max_over_time(db_client_connection_pending_requests{service_name=\"order-service\"}[30s]))",
+      "description": "No sustained queueing for an order-service DB connection: the 1-minute average of pending requests stays below 1. A single request waiting while the lazily-grown pool opens a connection is not queueing (seen live under baseline traffic: one pending=1 sample in 50 minutes, with 1 of 10 connections in use).",
+      "query": "max(avg_over_time(db_client_connection_pending_requests{service_name=\"order-service\"}[1m]))",
       "condition": {"op": "<", "threshold": 1, "min_fraction": 1.0}
     },
     {

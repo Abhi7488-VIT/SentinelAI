@@ -475,3 +475,31 @@ def test_onset_is_never_negative_zero() -> None:
     obs = evaluate_points("x", [(99.99999, 0.0)], cond, 1.0, 100.0)
     assert obs.onset_s == 0.0
     assert str(obs.onset_s) == "0.0"
+
+
+def test_cli_start_and_stop_reach_the_service(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Regression: `stop` has no --seed option and used to crash before removing the fault."""
+    from harness.controller import __main__ as cli
+    from harness.controller import service as svc
+
+    calls: list[tuple[str, str, int | None]] = []
+
+    async def fake_start(settings: object, sid: str, seed: int) -> dict[str, Any]:
+        calls.append(("start", sid, seed))
+        return {"run": {"run_id": "r"}}
+
+    async def fake_stop(settings: object, sid: str) -> dict[str, Any]:
+        calls.append(("stop", sid, None))
+        return {"stopped": sid}
+
+    monkeypatch.setattr(svc, "manual_start", fake_start)
+    monkeypatch.setattr(svc, "manual_stop", fake_stop)
+    monkeypatch.setenv("SEED", "7")
+    assert cli.main(["start", "db-pool-exhaustion", "--seed", "3"]) == 0
+    assert cli.main(["start", "db-pool-exhaustion"]) == 0
+    assert cli.main(["stop", "db-pool-exhaustion"]) == 0
+    assert calls == [
+        ("start", "db-pool-exhaustion", 3),
+        ("start", "db-pool-exhaustion", 7),
+        ("stop", "db-pool-exhaustion", None),
+    ]

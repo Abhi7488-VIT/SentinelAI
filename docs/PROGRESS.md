@@ -102,10 +102,39 @@ have not started.
 | T4 Backends | done |
 | T5 Loadgen + deploy emitter | done — **verified live in Codespace (2026-11-17)**: baseline run `20261117T184537Z-c99f0a` PASS (10 min, 5958 requests, 9.93 req/s, 0 errors = 0.000%, 5/5 settled checkout traces span all five services, all 5 services in Prometheus/Jaeger/Loki); deploy-check run `20261117T154229Z-719b99` PASS (payment-service 1.2.0→1.2.1 in 3.1 s, version label in Prometheus, both deploy events in Loki, rollback ok). First baseline (`20261117T153044Z-ec58e2`) failed: Jaeger was queried before the newest traces were fully exported; fixed by only reading traces that ended ≥ 30 s ago |
 | T6 Controller + ground truth | done — **verified live (2026-11-17)**: controller container healthy; `scenario list/validate` find S1 definition + plugin; HTTP API 401 without/with wrong token, 200 with token; dry run `20261117T185940Z-8ec55c` (S1, seed 42, 120/60/60 s) wrote a run record that validates against `ground-truth.schema.json` (0 errors, checked independently on the host), cites 15 evidence files (all present), fault NOT injected, no S1 symptoms observed, baseline + recovery healthy. 119 unit tests pass |
-| T7 S1 pool exhaustion | |
+| T7 S1 pool exhaustion | done — **verified live (2026-11-17)**: run `20261117T192849Z-e86599` VERIFIED, 9/9 symptoms + 3/3 recovery checks; evidence in `docs/evidence/phase-2/s1-20261117T192849Z-e86599/` and the T7 section below. Jaeger restarted once mid-fault (memory) — fix in the next commit |
 | T8 S2–S5 | |
 | T9 Reproducibility + CI | partial: `testbed-live.yml` (manual live checks) and CI testbed + actionlint jobs added early (ADR 0004); scenario suite and reproducibility still to do |
 | T10 Docs + report | |
+
+## Phase 2 — T7 evidence: S1 DB connection-pool exhaustion
+
+Run `20261117T192849Z-e86599` (seed 42, windows {'baseline_s': 120, 'observe_s': 300, 'recovery_s': 180}): **verified**. Fault 2026-11-17T19:30:49+00:00 → 2026-11-17T19:35:49+00:00. Evidence: `testbed/runs/db-pool-exhaustion/20261117T192849Z-e86599/queries/` (gitignored; raw backend responses).
+
+| phase | check | result | peak | onset | points met | evidence | query |
+|---|---|---|---|---|---|---|---|
+| before (baseline 120 s) | `order-pool-idle` | ok | 0 | 0s | 9/9 | 001-prometheus.json | `max(avg_over_time(db_client_connection_pending_requests{service_name="order-service"}[1m]))` |
+| before (baseline 120 s) | `order-5xx-low` | ok | 0 | 0s | 9/9 | 002-prometheus.json | `(sum(rate(http_server_request_duration_seconds_count{service_name="order-service", http_response_status_code=~"5.."}[1m])) or vector(0)) / sum(rate(http_server_request_duration_seconds_count{service_name="order-service"}[1m]))` |
+| before (baseline 120 s) | `frontend-5xx-low` | ok | 0 | 0s | 9/9 | 003-prometheus.json | `(sum(rate(http_server_request_duration_seconds_count{service_name="frontend", http_response_status_code=~"5.."}[1m])) or vector(0)) / sum(rate(http_server_request_duration_seconds_count{service_name="frontend"}[1m]))` |
+| during (observe 300 s) | `order-pool-pending` | ok | 38 | 15s | 20/21 | 004-prometheus.json | `max(max_over_time(db_client_connection_pending_requests{service_name="order-service"}[30s]))` |
+| during (observe 300 s) | `order-pool-saturated` | ok | 10 | 15s | 20/21 | 005-prometheus.json | `max(max_over_time(db_client_connection_count{service_name="order-service", db_client_connection_state="used"}[30s]))` |
+| during (observe 300 s) | `order-pool-timeout-logs` | ok | 294 | 10.9s | 21/21 | 006-loki.json | `sum(count_over_time({service_name="order-service"} \|= "Timed out waiting for a database connection" [1m]))` |
+| during (observe 300 s) | `order-5xx-share` | ok | 0.5556 | 30s | 19/21 | 007-prometheus.json | `(sum(rate(http_server_request_duration_seconds_count{service_name="order-service", http_response_status_code=~"5.."}[1m])) or vector(0)) / sum(rate(http_server_request_duration_seconds_count{service_name="order-service"}[1m]))` |
+| during (observe 300 s) | `frontend-5xx` | ok | 0.3112 | 30s | 19/21 | 008-prometheus.json | `(sum(rate(http_server_request_duration_seconds_count{service_name="frontend", http_response_status_code=~"5.."}[1m])) or vector(0)) / sum(rate(http_server_request_duration_seconds_count{service_name="frontend"}[1m]))` |
+| during (observe 300 s) | `order-error-traces` | ok | 50 | 278.3s | 50/50 | 009-jaeger.json | `jaeger {"service": "order-service", "tags": {"http.response.status_code": "503"}}` |
+| during (observe 300 s) | `gateway-error-traces` | ok | 50 | 272.9s | 50/50 | 010-jaeger.json | `jaeger {"service": "api-gateway", "tags": {"http.response.status_code": "502"}}` |
+| during (observe 300 s) | `frontend-error-traces` | ok | 50 | 272.9s | 50/50 | 011-jaeger.json | `jaeger {"service": "frontend", "tags": {"http.response.status_code": "502"}}` |
+| during (observe 300 s) | `payment-unaffected` | ok | 0 | 0s | 21/21 | 012-prometheus.json | `(sum(rate(http_server_request_duration_seconds_count{service_name="payment-service", http_response_status_code=~"5.."}[1m])) or vector(0)) / sum(rate(http_server_request_duration_seconds_count{service_name="payment-service"}[1m]))` |
+| after (recovery, last 90 s) | `order-pool-idle` | ok | 0 | 0s | 7/7 | 013-prometheus.json | `max(avg_over_time(db_client_connection_pending_requests{service_name="order-service"}[1m]))` |
+| after (recovery, last 90 s) | `order-5xx-low` | ok | 0 | 0s | 7/7 | 014-prometheus.json | `(sum(rate(http_server_request_duration_seconds_count{service_name="order-service", http_response_status_code=~"5.."}[1m])) or vector(0)) / sum(rate(http_server_request_duration_seconds_count{service_name="order-service"}[1m]))` |
+| after (recovery, last 90 s) | `frontend-5xx-low` | ok | 0 | 0s | 7/7 | 015-prometheus.json | `(sum(rate(http_server_request_duration_seconds_count{service_name="frontend", http_response_status_code=~"5.."}[1m])) or vector(0)) / sum(rate(http_server_request_duration_seconds_count{service_name="frontend"}[1m]))` |
+
+Notes (honest limits of this run):
+- **Jaeger restarted once during the fault** (19:34:20, 3.5 min in; memory 44 → 247.8 MiB of 256 MiB, sampled every 15 s, then 181 MiB at baseline). The trace checks ran against the traces stored after the restart; they found 50/50 matching traces per service, and every matched order-service trace has `error=true` spans (digest files). Fix and re-measurement: next commit.
+- **Trace-check onsets (273–278 s) are not symptom onsets**: they are the earliest of the 50 newest matching traces. Metric/log onsets (11–30 s) are the real ones. Fixed for fingerprints in T9.
+- Jaeger evidence is committed as digests (trace ids, span counts, status codes, SHA-256 of the 1.4–1.9 MB raw response); Prometheus/Loki responses are committed verbatim.
+
+How the run got here (all live, same day): run `…190432Z-3a977d` refused to inject (baseline check counted a single pending=1 connection-open blip; check changed to a 1-min average, which peaked at 0.17 over 50 min of baseline); run `…190723Z-51c4b4` observed 6/9 (Jaeger lost traces in a restart; its memstore cannot search the derived `error` tag, so trace checks now match the 503/502 status; recovery points overlapped the stop, so the default recovery window is now 180 s); run `…192356Z-83833b` was killed 8 s after injection by a `testbed-up` recreate (record left as `running`; traffic verified back on baseline). `scenario stop` crashed on a missing `--seed` (fixed, regression test).
 
 ## Phase 1 summary
 

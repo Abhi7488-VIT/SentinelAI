@@ -81,7 +81,7 @@ class Backends:
         return list(data.get("result") or []), name
 
     async def traces(
-        self, query: dict[str, Any], start: float, end: float, limit: int = 200
+        self, query: dict[str, Any], start: float, end: float, limit: int = 50
     ) -> tuple[list[dict[str, Any]], str]:
         params: dict[str, Any] = {
             "service": query["service"],

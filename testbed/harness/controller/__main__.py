@@ -69,7 +69,7 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--seed", type=int)
     r.add_argument("--baseline", type=int, default=120)
     r.add_argument("--observe", type=int, default=300)
-    r.add_argument("--recovery", type=int, default=120)
+    r.add_argument("--recovery", type=int, default=180)
     r.add_argument("--dry-run", action="store_true")
     s = sub.add_parser("start")
     s.add_argument("id")
@@ -111,7 +111,9 @@ def main(argv: list[str] | None = None) -> int:
         uvicorn.run(build_app(settings), host="0.0.0.0", port=args.port, log_level="warning")  # noqa: S104
         return 0
 
-    seed = settings.default_seed if args.seed is None else args.seed
+    # `stop` has no --seed option (it removes whatever the active run injected).
+    arg_seed = getattr(args, "seed", None)
+    seed = settings.default_seed if arg_seed is None else arg_seed
     try:
         if args.cmd == "run":
             options = RunOptions(

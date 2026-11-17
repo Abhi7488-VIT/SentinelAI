@@ -141,7 +141,7 @@ Separate Compose project (`name: sentinelai-testbed`, own network). Every port i
 grow into the 4 GB swap: a container that reaches its limit is OOM-killed inside its own cgroup and the
 host is never at risk. Grafana is **off by default** (`ui` profile). Short retention: Prometheus
 `retention.time=6h` + `retention.size=300MB`; Loki 6 h (compactor retention); Jaeger in-memory capped at
-10,000 traces.
+3,000 traces (revised from 10,000 during T7, 2026-11-17: measured ~235 MiB at 10,000 baseline traces and restarts under S1; see `testbed/infra/jaeger/jaeger.yaml`).
 
 | Container | Host port | Mem limit |
 |---|---|---|

@@ -28,7 +28,7 @@ class StartIn(BaseModel):
     seed: int | None = None
     baseline_s: int = Field(default=120, ge=30, le=900)
     observe_s: int = Field(default=300, ge=30, le=900)
-    recovery_s: int = Field(default=120, ge=60, le=900)
+    recovery_s: int = Field(default=180, ge=60, le=900)
     dry_run: bool = False
 
 

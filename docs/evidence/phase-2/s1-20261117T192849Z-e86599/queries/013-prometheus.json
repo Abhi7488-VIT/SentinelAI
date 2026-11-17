@@ -1,0 +1,51 @@
+{
+  "backend": "prometheus",
+  "query": "max(avg_over_time(db_client_connection_pending_requests{service_name=\"order-service\"}[1m]))",
+  "params": {
+    "query": "max(avg_over_time(db_client_connection_pending_requests{service_name=\"order-service\"}[1m]))",
+    "step": "15s",
+    "start": "1794944239.691",
+    "end": "1794944329.700"
+  },
+  "response": {
+    "status": "success",
+    "data": {
+      "resultType": "matrix",
+      "result": [
+        {
+          "metric": {},
+          "values": [
+            [
+              1794944239.691,
+              "0"
+            ],
+            [
+              1794944254.691,
+              "0"
+            ],
+            [
+              1794944269.691,
+              "0"
+            ],
+            [
+              1794944284.691,
+              "0"
+            ],
+            [
+              1794944299.691,
+              "0"
+            ],
+            [
+              1794944314.691,
+              "0"
+            ],
+            [
+              1794944329.691,
+              "0"
+            ]
+          ]
+        }
+      ]
+    }
+  }
+}

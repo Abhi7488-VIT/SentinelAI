@@ -39,7 +39,7 @@ class RunOptions:
     seed: int = 42
     baseline_s: int = 120
     observe_s: int = 300
-    recovery_s: int = 120
+    recovery_s: int = 180  # judged on the 2nd half: 90 s > the checks' 1 min lookback
     mode: str = "full"  # full | dry_run
 
     def validate(self) -> None:
