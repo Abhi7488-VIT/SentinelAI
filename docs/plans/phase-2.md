@@ -1,7 +1,7 @@
 # Phase 2 — Testbed (plan, revision 2)
 
-Status: **PROPOSED — awaiting approval.** Revision 2 replaces revision 1 to follow the Phase 2 brief
-of 2026-11-17 (services, scenarios, ground-truth files, Make workflow, deploy events).
+Status: **APPROVED 2026-11-17** (revision 2, with the user's answers and scale changes applied —
+see §13). Revision 2 replaced revision 1 to follow the Phase 2 brief of 2026-11-17.
 SentinelAI itself is not changed in this phase except for docs.
 
 ---
@@ -11,9 +11,9 @@ SentinelAI itself is not changed in this phase except for docs.
 | Item | Finding | Impact |
 |---|---|---|
 | Repo | Phase 1 merged to `main`; work on branch `phase-2-testbed`. | — |
-| WSL memory | 3.8 GB total, ~2.3 GB free with the SentinelAI stack and the unrelated `red-blue-range-*` containers running. 8 CPUs, 941 GB disk. | Testbed has a memory budget (§2.4). SentinelAI's stack is stopped while the testbed runs, unless WSL is raised to 6 GB (§13). |
+| WSL resources | Host has 8 GB RAM; WSL set to **4 GB** (3.9 GB visible), **4 CPUs**, 4 GB swap. 941 GB disk. | Testbed memory budget (§2.4); **SentinelAI's stack is stopped while the testbed runs**; containers may not use swap (§2.4). |
 | Ports | Free: 3001, 3100, 4317, 4318, 8081–8090, 8474, 9090, 16686. **8080 is taken** (red-blue-range). | Testbed frontend on 8081. |
-| `make` | **Not installed** on Windows or in WSL. | `sudo apt install -y make` in WSL (needs your password). `testbed/tb.sh` provides the same commands as the Makefile, so nothing is blocked. |
+| `make` | GNU Make 4.3 installed in WSL. | Makefile targets run from WSL; `testbed/tb.sh` is kept as the single implementation and fallback. |
 
 ---
 
@@ -88,7 +88,11 @@ flowchart LR
 **Seed data:**
 - **Users:** 5,000.
 - **Products:** 300.
-- **Orders:** about 2 million historical orders. Scenario 2 needs that volume so that losing the index produces a slow query you can measure.
+- **Orders:** about **500,000** historical orders (scaled for this hardware). Rows carry a realistic
+  shipping address and line-item JSON so a sequential scan is real work. Scenario 2 must still show a
+  clear before/after: its thresholds are relative to the baseline measured in the same run (§5), and
+  the gap is measured during T2 — if 500k rows ever stop producing a clear gap, the row width, not the
+  row count, is what gets tuned.
 - **Payments:** one per order.
 
 **All Python, not Node.** The brief allowed either. One toolchain keeps lint and type rules identical to the backend, and makes Phase 5's code reading uniform. A Node frontend would add realism but no Phase 2 value.
@@ -114,14 +118,19 @@ flowchart LR
 
 ### 2.4 Containers, ports and memory
 
-Separate Compose project (`name: sentinelai-testbed`, own network). Every port is published on 127.0.0.1 only, and every container has a `mem_limit`.
+Separate Compose project (`name: sentinelai-testbed`, own network). Every port is published on
+127.0.0.1 only. **Every container has `mem_limit` and an equal `memswap_limit`**, so no container can
+grow into the 4 GB swap: a container that reaches its limit is OOM-killed inside its own cgroup and the
+host is never at risk. Grafana is **off by default** (`ui` profile). Short retention: Prometheus
+`retention.time=6h` + `retention.size=300MB`; Loki 6 h (compactor retention); Jaeger in-memory capped at
+10,000 traces.
 
 | Container | Host port | Mem limit |
 |---|---|---|
 | frontend | 8081 | 128 MB |
 | api-gateway | — | **192 MB** (scenario 5 needs a limit it can reach) |
 | user-service, order-service, payment-service | — | 160 MB each |
-| postgres | — | 384 MB (2M-row orders table) |
+| postgres | — | 384 MB (500k-row orders table, `shared_buffers` 64 MB) |
 | redis | — | 64 MB |
 | toxiproxy | — | 48 MB |
 | loadgen | — | 128 MB |
@@ -132,7 +141,10 @@ Separate Compose project (`name: sentinelai-testbed`, own network). Every port i
 | jaeger (v2, in-memory, capped traces) | 16686 | 256 MB |
 | grafana (profile `ui`) | 3001 | 160 MB |
 
-The limits sum to about 2.9 GB (3.1 GB with Grafana); measured usage will be reported. With 2.3 GB free today, SentinelAI's stack is stopped while the testbed runs (§13).
+The limits sum to about 2.9 GB (3.1 GB with Grafana); real usage is expected well below and will be
+measured and reported (`docker stats`). SentinelAI's stack is stopped while the testbed runs.
+**Safety guard:** the controller reads the VM's `MemAvailable` before and during every run and aborts
+(runs the scenario's stop) if it falls below 500 MB.
 
 ---
 
@@ -171,10 +183,10 @@ One Python package, `testbed/harness`, exposed two ways: the CLI `tb scenario ru
 ## 4. Ground truth
 
 - **Definition files:** `testbed/scenarios/<id>.json` is committed. It holds `id`, `injected_fault`, `root_cause` (category, service, component, summary, code_location if any), `expected_symptoms` (each with id, signal, the exact query and threshold), `expected_affected_services`, and a `timeline` with `started_at` and `ended_at`.
-- **Runtime records.** *Assumption, since the brief says the times are "written at runtime":*
-  - **Where:** each run writes the same document with the times filled in, plus `run_id`, `seed`, and the observed symptom results, to `testbed/runs/<id>/<run_id>.json` (gitignored). The committed definition keeps `null` times.
-  - **Why:** editing the committed file on every run would dirty the repo, and two runs would overwrite each other's history.
-  - **Shortcut:** `testbed/runs/<id>/latest.json` always points at the newest run.
+- **Runtime records** (decided): each run writes the same document with the times filled in, plus
+  `run_id`, `seed` and the observed symptom results, to `testbed/runs/<id>/<run_id>.json`
+  (gitignored), and copies it to `testbed/runs/<id>/latest.json`. The committed definition keeps
+  `null` times, so runs never dirty the repo or overwrite each other.
 - **Schema:** `testbed/scenarios/schema/ground-truth.schema.json` (JSON Schema 2020-12) validates both the definition (times null) and the runtime record (times required, symptoms observed).
 - **Tests:** every registered scenario has a definition file, and it validates against the schema. Every expected symptom has a check implemented.
 - **Verified, never assumed:** a runtime record is `verified` only if every expected symptom was observed during the window and the baseline returned after stop. Otherwise it's `failed` (CLAUDE.md invariant 9).
@@ -187,12 +199,19 @@ One Python package, `testbed/harness`, exposed two ways: the CLI `tb scenario ru
 | # | Id | Reproducible trigger | Root cause (category · service) | Expected symptoms (each a query in the definition) | Stop |
 |---|---|---|---|---|---|
 | 1 | `db-pool-exhaustion` | Loadgen adds a seeded stream of `/internal/reports/daily` calls. The report holds its DB session open while it aggregates in Python, about 4 s each. | resource_exhaustion · order-service (DB connection pool) | `db_client_connection_pending_requests{service="order-service"} > 0` sustained; pool timeouts in logs (`QueuePool limit … timed out`); order-service 5xx share > 20%; error spans `order-service` → gateway → frontend; payment-service unaffected | Traffic pattern back to baseline |
-| 2 | `slow-sql-missing-index` | `DROP INDEX ix_orders_user_id_created_at` (the order-history lookup) | slow_query · order-service (orders table) | `GET /orders` p95 latency > 5× baseline; the DB span for that SELECT > 200 ms in Jaeger; the frontend's account page is slow; no error spike | `CREATE INDEX` again |
+| 2 | `slow-sql-missing-index` | `DROP INDEX ix_orders_user_id_created_at` (the order-history lookup) on the 500k-row table | slow_query · order-service (orders table) | `GET /orders` p95 latency ≥ 5× the run's own baseline p95; the DB span for that SELECT ≥ 10× its baseline and ≥ 25 ms in Jaeger; the frontend's account page slower by the same factor; no error spike | `CREATE INDEX` again; latency back within 1.5× baseline |
 | 3 | `failed-deployment-bad-config` | Deploy user-service 2.4.0, whose config points `USER_DB_NAME` at a database that doesn't exist (`users_v2`). A deploy event is emitted. | bad_deployment · user-service | Deploy event for user-service 2.4.0 in Loki; user-service crash-loops on startup (`database "users_v2" does not exist`); gateway auth calls fail, so login and account pages return 502/503; `service.instance.id` keeps changing | Roll back to 2.3.0 (a second deploy event) |
 | 4 | `payment-unavailable` | Toxiproxy disables the order → payment link (connection refused) | dependency_unavailable · payment-service | order-service client spans to payment-service error with connection refused; checkout 503 via gateway; payment-service request rate drops to 0; browsing unaffected | Re-enable the link |
-| 5 | `memory-leak` | Loadgen switches part of the traffic to a client that adds a cache-busting `?v=<nonce>` (seeded) to product-list calls. The gateway's response cache has no size bound, so every unique URL is kept forever. | memory_leak · api-gateway (response cache) | api-gateway `process_memory_usage` rises steadily (positive slope over the window); latency creeps up; the container reaches its 192 MB limit and is OOM-killed; restart visible as a new `service.instance.id` and a start log; 5xx gap during restarts | Traffic back to baseline, then gateway restart to free memory (recorded as recovery) |
+| 5 | `memory-leak` (**bounded**) | Loadgen switches part of the traffic to a client that adds a cache-busting `?v=<nonce>` (seeded, fixed rate) to product-list calls. The gateway's response cache has no size bound, so every unique URL is kept. | memory_leak · api-gateway (response cache) | api-gateway `process_memory_usage` rises at a steady, predictable slope; latency creeps up; the container reaches its 192 MB cgroup limit (no swap) in **about 3–4 minutes** and is OOM-killed; restart visible as a new `service.instance.id` and a start log; brief 5xx during the restart | Traffic back to baseline, then gateway restart to free memory (recorded as recovery) |
 
 Defaults: a 2-minute baseline, a 5-minute observe window and a 2-minute recovery window, all configurable per run (`--observe 120` for quicker runs).
+
+**Why the leak is bounded and safe:** growth comes from a fixed-rate, seeded stream of unique URLs,
+so the slope is predictable (calibrated in T8 to reach the limit in ~3–4 min, at most one OOM kill per
+observe window). The cap is the container's own cgroup limit with swap disabled
+(`memswap_limit = mem_limit`); the OOM kill happens inside that container only. On top of that the
+scenario has a hard time limit, and the controller's `MemAvailable` guard (§2.4) stops any run that
+squeezes the VM.
 
 **Reproducibility ("same seed → same symptom pattern"):**
 - **What's seeded:** every random source (loadgen arrivals and journeys, issuer declines, the nonce stream, seed data).
@@ -248,7 +267,7 @@ Same bar as Phase 1: format, lint, mypy strict, tests and build with real output
 | Task | Objective | Tests | Acceptance criteria |
 |---|---|---|---|
 | **T1** Skeleton | uv project, shared settings and telemetry module, single image with a command per service, compose with limits and healthchecks, `.env.example`, Makefile + `tb.sh`, ADR 0003 updated | settings; env-example coverage | `make testbed-up` from clean, all healthy |
-| **T2** Services | 5 services, call chain, schemas + seed (2M orders), releases + ops port | unit per service; integration of checkout through all hops | scripted checkout via :8081 succeeds; trace spans all 5 services |
+| **T2** Services | 5 services, call chain, schemas + seed (500k orders, with the indexed vs unindexed query time measured), releases + ops port | unit per service; integration of checkout through all hops | scripted checkout via :8081 succeeds; trace spans all 5 services |
 | **T3** Telemetry + Collector | instrumentation, pool and process metrics, log correlation, collector incl. disabled SentinelAI exporter | in-memory exporter tests (attributes, status, log↔trace ids); "no tell-tale words" test | collector shows all 3 signals from all 5 services |
 | **T4** Backends | Prometheus (OTLP), Loki (OTLP), Jaeger v2, Grafana profile + golden-signals dashboard | integration: series, services and logs present per service | queries return data; `docker stats` within limits |
 | **T5** Loadgen + deploy emitter | seeded journeys, traffic mixes, control port; `tb deploy` | same seed gives the same schedule; mix weights; deploy event schema | 10 min baseline < 0.5% errors (measured, reported) |
@@ -296,11 +315,13 @@ All versions pinned at implementation.
 - **Scenario coverage:** five scenarios. The other ten are designed for but not built.
 - **Reproducibility:** fingerprints match within a stated jitter tolerance, not to the millisecond.
 
-## 13. Decisions for you
+## 13. Decisions (resolved 2026-11-17)
 
-1. **WSL memory (recommended: 6 GB).**
-   - **How:** `%USERPROFILE%\.wslconfig` containing `[wsl2]` and `memory=6GB`, then `wsl --shutdown`.
-   - **Why:** it lets the testbed and the SentinelAI stack run together.
-   - **Without it:** I stop SentinelAI while working on the testbed, which is fine for Phase 2.
-2. **`make`:** run `sudo apt install -y make` in WSL, or use `testbed/tb.sh`.
-3. **The runtime ground-truth location** (§4 assumption): accept, or have runs overwrite `testbed/scenarios/<id>.json` itself.
+1. **Runtime ground truth:** committed definitions keep empty times; each run writes a filled copy to
+   `testbed/runs/<id>/<run_id>.json` (gitignored) plus `latest.json`.
+2. **Memory:** WSL stays at 4 GB on an 8 GB host. SentinelAI's stack is stopped while the testbed
+   runs; every container has a memory limit with swap disabled; Grafana is off by default; Prometheus
+   and Loki keep 6 hours.
+3. **`make`:** installed in WSL; `testbed/tb.sh` stays as the implementation and fallback.
+4. **Scale:** 500k orders for the slow-SQL scenario (clear before/after still required); the memory
+   leak is bounded and reaches its limit in a few minutes without risk to the host (§5).

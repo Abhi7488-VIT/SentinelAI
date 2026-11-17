@@ -1,6 +1,6 @@
 # ADR 0003 — Testbed architecture and evaluation integrity
 
-- Status: **Proposed** (becomes Accepted on Phase 2 plan approval)
+- Status: **Accepted** (2026-11-17, with Phase 2 plan approval)
 - Date: 2026-11-17
 - Phase: 2 (Testbed)
 
