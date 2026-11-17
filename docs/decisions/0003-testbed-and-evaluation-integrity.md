@@ -14,14 +14,17 @@ invariant 9).
 
 ## Decision
 
-1. **Two halves.** `testbed/app/` is the monitored system: ordinary code whose bugs ship in specific
-   releases. `testbed/harness/` holds the load generator, chaos controller and ground truth.
-   SentinelAI may read `testbed/app/` (Phase 5 code investigation) and its telemetry — nothing else.
-2. **Faults produce genuine symptoms only.** App-level faults are releases with real bugs, deployed
-   and rolled back like real releases; infrastructure faults are network toxics (Toxiproxy) on real
-   links. No fault adds a marker to telemetry.
-3. **Ground truth lives only in the harness** (its own `chaos` database), is written before and during
-   the run, and is **verified against observed telemetry**; unverified runs are excluded from
+1. **Separate the system from the answers.** `testbed/services/` is the monitored system: ordinary
+   application code. `testbed/scenarios/` (ground-truth definitions) and `testbed/harness/` (load
+   generator, fault controller, symptom checks, deploy emitter) hold the answers. SentinelAI may read
+   `testbed/services/` (Phase 5 code investigation) and its telemetry — nothing else.
+2. **Faults produce genuine symptoms only.** Triggers are things that happen to real systems: a
+   traffic pattern, a schema change, a deploy with bad config, a dependency becoming unreachable
+   (Toxiproxy on a real link). Deploy events are legitimate change signals and are emitted like a
+   CI/CD system would. No fault adds a marker to telemetry.
+3. **Ground truth lives only on the harness side** (`testbed/scenarios/<id>.json` definitions, runtime
+   records under `testbed/runs/`), and a run is marked `verified` only when every expected symptom was
+   **observed in the telemetry** and the baseline returned; unverified runs are excluded from
    evaluation.
 4. **Separate deployment.** The testbed is its own Compose project and network. The chaos controller
    has no Docker socket and acts only on an allow-list of testbed targets.

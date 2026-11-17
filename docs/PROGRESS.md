@@ -5,7 +5,7 @@ Read at the start of every session. Updated at the end of each phase.
 | Phase | Status | Notes |
 |---|---|---|
 | 1. Foundation | **Complete, merged to main (2026-11-17)** | Plan: `docs/plans/phase-1.md`. |
-| 2. Testbed | **Planning** — awaiting plan approval | Plan: `docs/plans/phase-2.md`; ADR 0003 proposed. |
+| 2. Testbed | **Planning** — revision 2 awaiting approval | Plan: `docs/plans/phase-2.md`; ADR 0003 proposed. |
 | 3. Incident management | Not started | |
 | 4. Investigation engine | Not started | |
 | 5. Recovery | Not started | |
