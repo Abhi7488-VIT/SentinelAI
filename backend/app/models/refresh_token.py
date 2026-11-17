@@ -13,10 +13,11 @@ from sqlalchemy import (
     func,
     text,
 )
-from sqlalchemy.dialects.postgresql import INET, UUID
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
+from app.db.types import IPAddress
 
 REVOKE_REASONS = ("logout", "reuse_detected", "rotated", "admin")
 
@@ -57,7 +58,7 @@ class RefreshToken(Base):
         UUID(as_uuid=True), ForeignKey("refresh_tokens.id", ondelete="SET NULL")
     )
     user_agent: Mapped[str | None] = mapped_column(String(512))
-    ip: Mapped[str | None] = mapped_column(INET)
+    ip: Mapped[str | None] = mapped_column(IPAddress)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

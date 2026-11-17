@@ -20,7 +20,7 @@ from redis.asyncio import Redis
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
-import app.models  # noqa: F401  (registers every table on Base.metadata for TRUNCATE)
+from app import models as _models  # noqa: F401  (registers every table for TRUNCATE)
 from app.core.config import Settings
 from app.db.base import Base
 from app.db.session import create_engine, create_sessionmaker
@@ -95,7 +95,7 @@ async def _clean_state(request: pytest.FixtureRequest) -> AsyncIterator[None]:
         tables = ", ".join(t.name for t in Base.metadata.sorted_tables)
         async with eng.begin() as conn:
             await conn.execute(text(f"TRUNCATE {tables} RESTART IDENTITY CASCADE"))
-    if "redis_client" in request.fixturenames or "client" in request.fixturenames:
+    if {"engine", "redis_client"} & set(request.fixturenames):
         r = Redis.from_url(TEST_REDIS_URL)
         await r.flushdb()
         await r.aclose()

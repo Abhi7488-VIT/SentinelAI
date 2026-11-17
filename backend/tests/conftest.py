@@ -25,9 +25,9 @@ def env_value(name: str, default: str) -> str:
 
 
 TEST_DATABASE_URL = env_value(
-    "TEST_DATABASE_URL", "postgresql+asyncpg://sentinel:sentinel@localhost:5432/sentinel_test"
+    "TEST_DATABASE_URL", "postgresql+asyncpg://sentinel:sentinel@127.0.0.1:5432/sentinel_test"
 )
-TEST_REDIS_URL = env_value("TEST_REDIS_URL", "redis://localhost:6379/15")
+TEST_REDIS_URL = env_value("TEST_REDIS_URL", "redis://127.0.0.1:6379/15")
 
 
 def make_settings(**overrides: Any) -> Settings:

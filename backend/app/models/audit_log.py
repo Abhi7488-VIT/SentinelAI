@@ -5,10 +5,11 @@ from datetime import datetime
 from typing import Any
 
 from sqlalchemy import BigInteger, DateTime, ForeignKey, Identity, Index, String, func, text
-from sqlalchemy.dialects.postgresql import INET, JSONB, UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
+from app.db.types import IPAddress
 
 
 class AuditLog(Base):
@@ -33,7 +34,7 @@ class AuditLog(Base):
     action: Mapped[str] = mapped_column(String(64), nullable=False)
     target_type: Mapped[str | None] = mapped_column(String(32))
     target_id: Mapped[str | None] = mapped_column(String(64))
-    ip: Mapped[str | None] = mapped_column(INET)
+    ip: Mapped[str | None] = mapped_column(IPAddress)
     user_agent: Mapped[str | None] = mapped_column(String(512))
     request_id: Mapped[str | None] = mapped_column(String(128))
     metadata_: Mapped[dict[str, Any]] = mapped_column(

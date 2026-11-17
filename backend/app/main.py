@@ -10,6 +10,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from redis.asyncio import Redis
 
 from app import __version__
 from app.api.health import router as health_router
@@ -33,10 +34,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         engine = create_engine(settings)
         app.state.engine = engine
         app.state.sessionmaker = create_sessionmaker(engine)
+        redis = Redis.from_url(
+            settings.redis_url.get_secret_value(),
+            socket_connect_timeout=2,
+            socket_timeout=2,
+            health_check_interval=30,
+        )
+        app.state.redis = redis
         logger.info("app.startup", env=settings.env, version=__version__)
         try:
             yield
         finally:
+            await redis.aclose()
             await engine.dispose()
             logger.info("app.shutdown")
 
