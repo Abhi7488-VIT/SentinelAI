@@ -33,6 +33,10 @@ EXPECTED_TABLES = {
     "service_instances",
     "detector_states",
     "detections",
+    "incidents",
+    "incident_detections",
+    "incident_services",
+    "incident_events",
 }
 
 

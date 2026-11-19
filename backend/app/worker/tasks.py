@@ -68,6 +68,8 @@ def detection_tick() -> dict[str, Any]:
         "fired": [str(i) for i in result.fired],
         "resolved": [str(i) for i in result.resolved],
         "escalated": [str(i) for i in result.escalated],
+        "incidents_created": [str(i) for i in result.incidents_created],
+        "incidents_joined": [str(i) for i in result.incidents_joined],
         "duration_ms": result.duration_ms,
     }
 

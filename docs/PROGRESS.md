@@ -16,7 +16,7 @@ Plan: `docs/plans/phase-3.md`, approved 2026-11-19 (D1–D6 as proposed). Work r
 | T5 Testbed wiring (live) | done — see below |
 | T6 Dependency graph | done — see below |
 | T7 Detection | done — see below |
-| T8 Correlation + incidents | not started |
+| T8 Correlation + incidents | done — see below (grouping verified in tests; live S1 is T10) |
 | T9 UI | not started |
 | T10 Live acceptance + benchmarks | not started — **stop and report** after the S1 run and after the 10-min quiet baseline |
 | T11 Docs + report | not started |
@@ -201,6 +201,42 @@ Plan: `docs/plans/phase-3.md`, approved 2026-11-19 (D1–D6 as proposed). Work r
   no 30-min span scan per tick).
 - Limitations: one transaction per tick for all orgs (fine for one org / tens of services);
   pool metrics only in OTel semconv names; worker metrics still logs only.
+
+### T8 Correlation + incidents (2026-11-19)
+- Migration `0008`: `incidents` (per-org number, derived title/severity/start, status CHECKs,
+  keyset/status/started_at indexes, `pg_trgm` GIN on title, partial index for active ones),
+  `incident_detections` (detection id unique → linked once; reasons + score), `incident_services`,
+  `incident_events` (BIGINT identity ids for Phase 4 SSE replay).
+- Correlator runs at the end of every detection tick (same transaction/lock). Reasons:
+  shared_trace 3, exception_signature 3, dependency_edge 2, deploy_proximity 2, same_service 1;
+  at least one required (time alone never merges); highest score, ties → oldest; otherwise a new
+  incident. Severity follows detections (severity_changed events); `all_detections_resolved`
+  after 10 quiet minutes; the system never resolves incidents.
+- API: `GET /incidents` (project, status, severity, service, from/to, `q` = title or `#number`,
+  cursor), `GET /incidents/{id}` (services, detections with explanations + reasons),
+  `POST /incidents/{id}/transitions` (engineer+, audited, 409 `invalid_transition`),
+  `GET /incidents/{id}/events?after_id`.
+- Verified: **397 backend tests pass** (+8 integration: cascading failure in shared traces →
+  one incident with frontend/api-gateway/order-service and not payment-service, joins carry
+  shared_trace + dependency_edge, retried tick and a second correlator pass add nothing;
+  time-only proximity → two incidents; each of dependency_edge / exception_signature /
+  shared_trace merges alone; tie → older incident; resolved incident takes nothing (new incident);
+  all_detections_resolved after 10 min and status stays open; API filters/search incl. literal
+  wildcards, detail, viewer 403, invalid 409, full transition chain + events paging + audit,
+  cross-org 404 on every incident route; +14 unit: titles, severity, transition table).
+  ruff/mypy strict clean; `alembic check` clean. EXPLAIN on 50k incidents: every filter
+  0.06–2.4 ms with the intended indexes (`docs/evidence/phase-3/t8-correlation.md`).
+  **Live:** migration applied, ticks with correlation ~260–300 ms, APIs answer; 0 detections at
+  baseline so correlation itself is **not yet verified live** (S1 run, T10).
+- Plan deviation: `deploy_proximity` uses deploy_change links (deployment on the detection's
+  service or a direct neighbour) instead of "any incident service", which would merge on timing
+  alone (ADR 0006). `GET /overview` moves to T9 with the Overview page.
+- Found while verifying: detections firing in the same tick were correlated in random-UUID
+  order (flaky test: which join carried `dependency_edge` varied). Now ordered by
+  (fired_at, started_at, service_id, rule); test asserts order-independent facts; 3 repeat runs
+  green.
+- Limitations: a user resolving an incident in the same instant a tick links a detection to it
+  is not serialized.
 
 ## Phase 2 report (2026-11-17) — testbed
 

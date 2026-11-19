@@ -415,6 +415,10 @@ class DetectionRepository(TenantRepository[Detection]):
         stmt = self.scoped().where(Detection.resolved_at.is_(None)).order_by(Detection.fired_at)
         return list((await self.session.scalars(stmt)).all())
 
+    async def fired_since(self, rule: str, since: datetime) -> list[Detection]:
+        stmt = self.scoped().where(Detection.rule == rule, Detection.fired_at >= since)
+        return list((await self.session.scalars(stmt.order_by(Detection.fired_at))).all())
+
     async def get_many(self, ids: Sequence[uuid.UUID]) -> list[Detection]:
         if not ids:
             return []

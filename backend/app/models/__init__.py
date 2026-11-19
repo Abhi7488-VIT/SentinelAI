@@ -8,6 +8,7 @@ from app.models.detection import (
     ServiceWindowStats,
 )
 from app.models.graph import EdgeSource, ServiceEdge
+from app.models.incident import Incident, IncidentDetection, IncidentEvent, IncidentService
 from app.models.organization import Organization, OrganizationMember, Role
 from app.models.project import Project
 from app.models.refresh_token import RefreshToken
@@ -30,6 +31,10 @@ __all__ = [
     "DetectorState",
     "EdgeSource",
     "HealthStatus",
+    "Incident",
+    "IncidentDetection",
+    "IncidentEvent",
+    "IncidentService",
     "IngestBatch",
     "IngestUsage",
     "LogRecord",

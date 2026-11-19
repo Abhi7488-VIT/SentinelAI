@@ -1,4 +1,5 @@
-"""Detection tick (Phase 3 T7, ADR 0006): rollup → rules → state machine → detections.
+"""Detection tick (Phase 3 T7/T8, ADR 0006): rollup → rules → state machine → detections →
+correlation into incidents.
 
 Runs every 15 s from beat. Evaluation time `eval_end` = now - 30 s, floored to the 15-s grid,
 so late-arriving spans do not look like a drop. One transaction per tick under an advisory lock
@@ -60,6 +61,7 @@ from app.repositories.detection import (
 )
 from app.repositories.service_graph import ServiceEdgeRepository, orgs_with_recent_telemetry
 from app.repositories.services import ServiceRepository
+from app.services.correlation import Correlator
 
 logger = get_logger("app.detection")
 
@@ -152,6 +154,8 @@ class TickResult:
     fired: list[uuid.UUID] = field(default_factory=list)
     resolved: list[uuid.UUID] = field(default_factory=list)
     escalated: list[uuid.UUID] = field(default_factory=list)
+    incidents_created: list[uuid.UUID] = field(default_factory=list)
+    incidents_joined: list[uuid.UUID] = field(default_factory=list)
     duration_ms: float = 0.0
 
 
@@ -180,6 +184,8 @@ async def run_tick(session: AsyncSession, *, now: datetime | None = None) -> Tic
         fired=len(result.fired),
         resolved=len(result.resolved),
         escalated=len(result.escalated),
+        incidents_created=len(result.incidents_created),
+        incidents_joined=len(result.incidents_joined),
         duration_ms=result.duration_ms,
     )
     return result
@@ -195,6 +201,7 @@ class OrgTick:
         result: TickResult,
     ) -> None:
         self.session = session
+        self.scope = scope
         self.now = now
         self.eval_end = eval_end
         self.result = result
@@ -219,6 +226,11 @@ class OrgTick:
         await self._deploy_changes()
         await self.session.flush()
         await self._health_status(services)
+        await self.session.flush()
+        # Correlation sees this tick's detections (plan §2: rollup → detection → correlation).
+        correlated = await Correlator(self.session, self.scope, self.eval_end).run()
+        self.result.incidents_created += correlated.created
+        self.result.incidents_joined += correlated.joined
 
     # ---- rollup -----------------------------------------------------------------------------
 
