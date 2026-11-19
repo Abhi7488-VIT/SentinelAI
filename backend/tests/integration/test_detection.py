@@ -234,14 +234,15 @@ async def test_saturated_pool_with_waiters_fires(
             )
         t += 10 * S
 
-    # Ticks' now = eval_end + 30 s; metrics are read up to now.
-    await ticks(sessionmaker, t0 - 60 * S, t0 + 60 * S, seen=[order])
+    # Metrics are read in [eval_end - 60 s, eval_end): the first saturated point (t0) counts at
+    # eval_end t0 + 15 s.
+    await ticks(sessionmaker, t0 - 60 * S, t0 + 90 * S, seen=[order])
     (det,) = await _detections(sessionmaker, org, "resource_saturation")
     assert det["metric"] == "pool_utilization"
     assert det["observed_value"] == 1.0
     assert det["evidence"]["facts"]["pools"][0]["pending"] == 3
     assert "connection pool `orders` 10/10 in use (100.0%) with 3 pending" in det["explanation"]
-    # Fired 60 s after the first saturated reading was visible (eval_end t0-30 → now t0).
+    assert det["started_at"] == t0 + 15 * S
     assert det["fired_at"] - det["started_at"] == 60 * S
 
 
@@ -275,6 +276,91 @@ async def test_heartbeat_loss_and_crash_loop(
         for r in await rows(sessionmaker, "SELECT name, health_status FROM services")
     }
     assert statuses["order-service"] == "unhealthy"
+
+
+# ---- one clock: every rule is evaluated as of eval_end (T10 S1 run 20261119T171535Z-e076ed) ----
+# A tick runs at now = eval_end + 30 s and stamps transitions with eval_end, so a rule must only
+# see data before eval_end; otherwise an event at T is stamped up to 30 s before T. The event
+# times below are deliberately off the 15-s grid.
+
+
+async def test_saturation_is_not_stamped_before_the_first_saturated_reading(
+    sessionmaker: SM, shop: dict[str, Any], partitions: None, t0: datetime
+) -> None:
+    org, order = shop["org"], shop["svc"]["order-service"]
+    base = {"service.instance.id": "i-1", "db.client.connection.pool.name": "orders"}
+    used = await _series(
+        sessionmaker,
+        org,
+        order,
+        "db.client.connection.count",
+        {**base, "db.client.connection.state": "used"},
+    )
+    mx = await _series(sessionmaker, org, order, "db.client.connection.max", base)
+    pending = await _series(sessionmaker, org, order, "db.client.connection.pending_requests", base)
+    first_saturated = t0 + 8 * S  # points every 10 s: t0 - 2 s idle, t0 + 8 s saturated
+    t = first_saturated - 120 * S
+    while t < first_saturated + 240 * S:
+        bad = t >= first_saturated
+        for sid, value in ((used, 10 if bad else 1), (mx, 10), (pending, 25 if bad else 0)):
+            await sql(
+                sessionmaker,
+                "INSERT INTO metric_points (org_id, series_id, ts, value) VALUES (:o, :s, :t, :v)",
+                o=org,
+                s=sid,
+                t=t,
+                v=value,
+            )
+        t += 10 * S
+
+    # The tick for eval_end t0 runs at t0 + 30 s, when the t0 + 8 s reading already exists; as of
+    # t0 the pool was idle.
+    await ticks(sessionmaker, t0 - 60 * S, t0, seen=[order])
+    assert (await _state(sessionmaker, order, "resource_saturation"))["state"] == "ok"
+
+    await ticks(sessionmaker, t0 + 15 * S, t0 + 90 * S, seen=[order])
+    (det,) = await _detections(sessionmaker, org, "resource_saturation")
+    assert det["started_at"] >= first_saturated
+    assert det["started_at"] == t0 + 15 * S  # first eval_end that includes the reading
+    assert det["fired_at"] - det["started_at"] == 60 * S
+
+
+async def test_heartbeat_loss_is_not_stamped_before_90_s_of_silence(
+    sessionmaker: SM, shop: dict[str, Any], partitions: None, t0: datetime
+) -> None:
+    org, order, gw = shop["org"], shop["svc"]["order-service"], shop["svc"]["api-gateway"]
+    await ticks(sessionmaker, t0 - 30 * S, t0, seen=[order, gw])
+    last_seen = t0 + 30 * S  # now of the last tick above
+    await ticks(sessionmaker, t0 + 15 * S, t0 + 180 * S, seen=[gw])
+    (lost,) = [
+        d
+        for d in await _detections(sessionmaker, org, "health_check")
+        if d["service"] == "order-service"
+    ]
+    assert lost["started_at"] - last_seen >= 90 * S
+    assert lost["started_at"] == last_seen + 90 * S  # on the grid: t0 + 120 s
+    assert lost["observed_value"] == 90.0
+    assert "no telemetry for 90 s" in lost["explanation"]
+
+
+async def test_crash_loop_is_not_stamped_before_the_third_new_instance(
+    sessionmaker: SM, shop: dict[str, Any], partitions: None, t0: datetime
+) -> None:
+    org, order, gw = shop["org"], shop["svc"]["order-service"], shop["svc"]["api-gateway"]
+    third = t0 + 20 * S
+    for n, start in enumerate((t0 + 5 * S, t0 + 10 * S, third)):
+        await traffic(sessionmaker, org, gw, start, start + 5 * S, rps=1, instance=f"gw-{n}")
+    # The tick for eval_end t0 runs at t0 + 30 s and can see all three instances; none had
+    # started as of t0.
+    await ticks(sessionmaker, t0 - 30 * S, t0, seen=[order, gw])
+    assert await _detections(sessionmaker, org, "health_check") == []
+
+    await ticks(sessionmaker, t0 + 15 * S, t0 + 60 * S, seen=[order, gw])
+    (loop,) = await _detections(sessionmaker, org, "health_check")
+    assert loop["service"] == "api-gateway"
+    assert loop["metric"] == "new_instances_5m"
+    assert loop["started_at"] >= third
+    assert loop["started_at"] == t0 + 30 * S  # first eval_end after the third instance
 
 
 async def test_detections_api_filters_and_isolation(

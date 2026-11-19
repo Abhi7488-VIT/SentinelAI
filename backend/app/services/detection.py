@@ -2,9 +2,12 @@
 correlation into incidents.
 
 Runs every 15 s from beat. Evaluation time `eval_end` = now - 30 s, floored to the 15-s grid,
-so late-arriving spans do not look like a drop. One transaction per tick under an advisory lock
-(overlapping ticks skip); per detector, a tick whose `eval_end` was already evaluated is a no-op,
-so a retried tick changes nothing, and detections are unique on (service, rule, started_at).
+so late-arriving spans do not look like a drop. Every rule reads data before `eval_end` only
+(rollups, metric points, silence, new instances) because transitions are stamped with it; `now`
+is used only for recording instances and the current health badge. One transaction per tick
+under an advisory lock (overlapping ticks skip); per detector, a tick whose `eval_end` was
+already evaluated is a no-op, so a retried tick changes nothing, and detections are unique on
+(service, rule, started_at).
 
 Deterministic only: SQL aggregation + the pure rules in `app.detection` (invariant 8).
 """
@@ -327,8 +330,8 @@ class OrgTick:
             readings = await self.metrics.latest(
                 svc.id,
                 [POOL_USED, POOL_MAX, POOL_PENDING, MEMORY_USAGE],
-                self.now - METRIC_WINDOW,
-                self.now + timedelta(seconds=1),
+                self.eval_end - METRIC_WINDOW,
+                self.eval_end,
             )
             limit = (svc.telemetry_config or {}).get("memory_limit_bytes")
             memory = (
@@ -341,14 +344,19 @@ class OrgTick:
                 else []
             )
             return resource_saturation(pool_readings(readings), memory, p)
-        # HEALTH_CHECK
+        # HEALTH_CHECK, as of eval_end. last_seen_at is the latest arrival only: telemetry that
+        # arrived after eval_end counts as not silent at eval_end (0 s).
         silent = (
-            (self.now - svc.last_seen_at).total_seconds() if svc.last_seen_at is not None else None
+            max(0.0, (self.eval_end - svc.last_seen_at).total_seconds())
+            if svc.last_seen_at is not None
+            else None
         )
-        new_5m = await self.instances.first_seen_since(
-            svc.id, self.now - timedelta(seconds=CRASH_LOOP_WINDOW_S)
+        new_5m = await self.instances.first_seen_between(
+            svc.id, self.eval_end - timedelta(seconds=CRASH_LOOP_WINDOW_S), self.eval_end
         )
-        new_2m = await self.instances.first_seen_since(svc.id, self.now - timedelta(minutes=2))
+        new_2m = await self.instances.first_seen_between(
+            svc.id, self.eval_end - timedelta(minutes=2), self.eval_end
+        )
         return health_check(silent, len(new_5m), len(new_2m), new_5m)
 
     async def _latency_baseline(self, svc: Service, p: RuleParams) -> list[float]:

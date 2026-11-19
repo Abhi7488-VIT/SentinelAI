@@ -257,13 +257,17 @@ class ServiceInstanceRepository(TenantRepository[ServiceInstance]):
             {"org": self.ctx.org_id, "svc": service_id, "start": start, "end": end},
         )
 
-    async def first_seen_since(self, service_id: uuid.UUID, since: datetime) -> list[str]:
+    async def first_seen_between(
+        self, service_id: uuid.UUID, start: datetime, end: datetime
+    ) -> list[str]:
+        """Instances first seen in [start, end), newest first (≤ 50)."""
         stmt = (
             select(ServiceInstance.instance_id)
             .where(
                 ServiceInstance.org_id == self.ctx.org_id,
                 ServiceInstance.service_id == service_id,
-                ServiceInstance.first_seen_at >= since,
+                ServiceInstance.first_seen_at >= start,
+                ServiceInstance.first_seen_at < end,
             )
             .order_by(ServiceInstance.first_seen_at.desc())
             .limit(50)
