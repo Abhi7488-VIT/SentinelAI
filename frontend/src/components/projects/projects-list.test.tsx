@@ -28,7 +28,7 @@ describe("ProjectsList", () => {
     const region = screen.getByRole("region", { name: "Projects" });
     expect(region.getAttribute("aria-busy")).toBe("true");
     expect(screen.getByText("Loading projects…")).toBeTruthy();
-    expect(screen.getByText("Telemetry")).toBeTruthy();
+    expect(screen.getByText("Slug")).toBeTruthy();
   });
 
   it("shows the error inside the block with the request id, and retries", async () => {
@@ -70,7 +70,7 @@ describe("ProjectsList", () => {
     expect(screen.queryByRole("button", { name: "New project" })).toBeNull();
   });
 
-  it("renders each project with its slug, telemetry status and ISO date", () => {
+  it("renders each project with its slug, ISO date and a link into the project", () => {
     render(
       <ProjectsList
         state={{
@@ -80,6 +80,7 @@ describe("ProjectsList", () => {
         canCreate
         onCreate={noop}
         onRetry={noop}
+        hrefFor={(p) => `/orgs/o/projects/${p.id}`}
       />,
     );
     const items = screen.getAllByRole("listitem");
@@ -88,7 +89,8 @@ describe("ProjectsList", () => {
     expect(items[0].textContent).toContain("checkout-api");
     expect(items[0].textContent).toContain("2026-11-17");
     expect(items[1].textContent).toContain("Search");
-    expect(screen.getAllByText("No telemetry yet").length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByRole("link", { name: "Search" }).getAttribute("href")).toBe("/orgs/o/projects/x2");
+    expect(screen.queryByText("No telemetry yet")).toBeNull(); // no invented status
   });
 
   it("offers load more only when there is a next page", async () => {

@@ -20,7 +20,7 @@ function subline(count: number, more: boolean, canCreate: boolean): string {
   if (count === 0) return canCreate ? "Nothing is being watched yet." : "Nothing is being watched yet. You have view access.";
   const n = more ? `${count}+` : String(count);
   const noun = count === 1 && !more ? "project" : "projects";
-  return `${n} ${noun} · none sending telemetry yet${canCreate ? "" : " · you have view access"}`;
+  return `${n} ${noun}${canCreate ? "" : " · you have view access"}`;
 }
 
 export function ProjectsView() {
@@ -79,6 +79,7 @@ export function ProjectsView() {
         hasMore={Boolean(query.hasNextPage)}
         loadingMore={query.isFetchingNextPage}
         onLoadMore={() => void query.fetchNextPage()}
+        hrefFor={(p) => `/orgs/${orgId}/projects/${p.id}/services`}
       />
       {canCreate ? <CreateProjectDialog orgId={orgId} open={creating} onOpenChange={setCreating} /> : null}
     </div>
