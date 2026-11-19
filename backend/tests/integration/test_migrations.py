@@ -21,6 +21,7 @@ EXPECTED_TABLES = {
     "services",
     "service_dependencies",
     "service_api_keys",
+    "service_edges",
     "spans",
     "log_records",
     "metric_series",
@@ -211,3 +212,54 @@ async def test_dependency_checks(
             t=target,
             e=external,
         )
+
+
+async def test_0006_backfills_declared_edges_from_existing_dependencies(
+    engine: AsyncEngine,
+) -> None:
+    await run_alembic("downgrade", "0005")
+    try:
+        org_a, _org_b, proj_a, _proj_b = await _two_orgs_with_projects(engine)
+        svc, other = uuid.uuid4(), uuid.uuid4()
+        for sid, name in ((svc, "a"), (other, "b")):
+            await _exec(
+                engine,
+                "INSERT INTO services (id, org_id, project_id, name, environment) "
+                "VALUES (:id, :o, :p, :n, 'production')",
+                id=sid,
+                o=org_a,
+                p=proj_a,
+                n=name,
+            )
+        await _exec(
+            engine,
+            "INSERT INTO service_dependencies (org_id, service_id, target_service_id) "
+            "VALUES (:o, :s, :t)",
+            o=org_a,
+            s=svc,
+            t=other,
+        )
+        await _exec(
+            engine,
+            "INSERT INTO service_dependencies (org_id, service_id, target_external) "
+            "VALUES (:o, :s, 'postgresql:orders')",
+            o=org_a,
+            s=svc,
+        )
+    finally:
+        await run_alembic("upgrade", "head")
+    async with engine.connect() as conn:
+        rows = (
+            await conn.execute(
+                text(
+                    "SELECT e.source, e.target_service_id, e.target_external "
+                    "FROM service_edges e JOIN service_dependencies d "
+                    "ON d.id = e.declared_dependency_id AND d.org_id = e.org_id "
+                    "ORDER BY e.target_external NULLS FIRST"
+                )
+            )
+        ).all()
+    assert [tuple(r) for r in rows] == [
+        ("declared", other, None),
+        ("declared", None, "postgresql:orders"),
+    ]

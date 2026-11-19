@@ -64,6 +64,11 @@ class ServiceRepository(TenantRepository[Service]):
         stmt = self.scoped().where(Service.project_id == project_id, Service.archived_at.is_(None))
         return list((await self.session.scalars(stmt)).all())
 
+    async def active(self) -> list[Service]:
+        """All active services of the tenant (registry sizes are small: tens to hundreds)."""
+        stmt = self.scoped().where(Service.archived_at.is_(None)).order_by(Service.id)
+        return list((await self.session.scalars(stmt)).all())
+
 
 class ServiceDependencyRepository(TenantRepository[ServiceDependency]):
     model = ServiceDependency

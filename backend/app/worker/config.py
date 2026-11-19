@@ -32,6 +32,13 @@ def configure_celery(app: Celery, settings: Settings) -> Celery:
                 "schedule": 600.0,
                 "options": {"expires": 540},
             },
+            # Observed dependency edges over the last 2 min of spans (Phase 3 T6). Windows
+            # overlap, so a skipped or expired run loses nothing.
+            "graph-discover-edges": {
+                "task": "graph.discover_edges",
+                "schedule": 60.0,
+                "options": {"expires": 55},
+            },
         },
     )
     return app

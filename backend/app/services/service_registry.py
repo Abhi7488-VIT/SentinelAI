@@ -18,6 +18,7 @@ from app.core.errors import ConflictError, InvalidRequestError, NotFoundError
 from app.core.security.api_keys import generate_key
 from app.core.tenancy import TenantContext
 from app.models.service import Service, ServiceApiKey, ServiceDependency
+from app.repositories.service_graph import ServiceEdgeRepository
 from app.repositories.services import (
     ServiceApiKeyRepository,
     ServiceDependencyRepository,
@@ -49,6 +50,7 @@ class ServiceRegistryService:
         self.services = ServiceRepository(session, ctx)
         self.deps = ServiceDependencyRepository(session, ctx)
         self.keys = ServiceApiKeyRepository(session, ctx)
+        self.edges = ServiceEdgeRepository(session, ctx)
         self.audit = AuditService(session)
 
     # ---- services -------------------------------------------------------------------------
@@ -202,8 +204,9 @@ class ServiceRegistryService:
                     code="invalid_dependency_target",
                 )
 
+        # Deleting the old rows also deletes their declared graph edges (FK cascade).
         await self.deps.delete_for_service(service.id)
-        for dep in deps:
+        added = [
             await self.deps.add(
                 ServiceDependency(
                     service_id=service.id,
@@ -212,6 +215,10 @@ class ServiceRegistryService:
                     description=dep.description,
                 )
             )
+            for dep in deps
+        ]
+        # Each declared edge cites its dependency row; same transaction, so they cannot diverge.
+        await self.edges.add_declared(added, at=datetime.now(UTC))
         self._audit(
             "service.dependencies_set",
             meta,

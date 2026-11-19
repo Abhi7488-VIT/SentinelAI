@@ -218,6 +218,26 @@ export interface paths {
         patch: operations["update_project_api_v1_orgs__org_id__projects__project_id__patch"];
         trace?: never;
     };
+    "/api/v1/orgs/{org_id}/service-graph": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Service Graph
+         * @description Services of a project with their declared and observed edges (both kept, by `source`).
+         */
+        get: operations["get_service_graph_api_v1_orgs__org_id__service_graph_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/orgs/{org_id}/services": {
         parameters: {
             query?: never;
@@ -529,6 +549,72 @@ export interface components {
         /** ErrorResponse */
         ErrorResponse: {
             error: components["schemas"]["ErrorBody"];
+        };
+        /** GraphEdge */
+        GraphEdge: {
+            /**
+             * Call Count
+             * @description Observed edges: calls counted in the 2-minute discovery window that last saw the edge (not a lifetime total). Declared edges: 0.
+             */
+            call_count: number;
+            /**
+             * Declared Dependency Id
+             * @description Declared edges: the declared dependency this edge comes from.
+             */
+            declared_dependency_id?: string | null;
+            /**
+             * First Seen At
+             * Format: date-time
+             */
+            first_seen_at: string;
+            /** From Node */
+            from_node: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Last Seen At
+             * Format: date-time
+             */
+            last_seen_at: string;
+            /**
+             * Sample Trace Id
+             * @description Observed edges: hex trace id of a trace showing the call.
+             */
+            sample_trace_id?: string | null;
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "declared" | "observed";
+            /** To Node */
+            to_node: string;
+        };
+        /**
+         * GraphNode
+         * @description A registered service (`kind=service`) or an external system (`kind=external`).
+         *
+         *     `id` is `service:<uuid>` or `external:<name>`; edges reference nodes by this id.
+         */
+        GraphNode: {
+            /** Environment */
+            environment?: string | null;
+            health_status?: components["schemas"]["HealthStatus"] | null;
+            /** Id */
+            id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "service" | "external";
+            /** Last Seen At */
+            last_seen_at?: string | null;
+            /** Name */
+            name: string;
+            /** Service Id */
+            service_id?: string | null;
         };
         /**
          * HealthStatus
@@ -843,6 +929,23 @@ export interface components {
             region?: string | null;
             /** Runtime */
             runtime?: string | null;
+        };
+        /** ServiceGraphOut */
+        ServiceGraphOut: {
+            /** Edges */
+            edges: components["schemas"]["GraphEdge"][];
+            /** Nodes */
+            nodes: components["schemas"]["GraphNode"][];
+            /**
+             * Project Id
+             * Format: uuid
+             */
+            project_id: string;
+            /**
+             * Truncated
+             * @description True if the edge list hit the server's hard limit.
+             */
+            truncated: boolean;
         };
         /** ServiceOut */
         ServiceOut: {
@@ -2445,6 +2548,75 @@ export interface operations {
                 };
             };
             /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_service_graph_api_v1_orgs__org_id__service_graph_get: {
+        parameters: {
+            query: {
+                project_id: string;
+            };
+            header?: never;
+            path: {
+                org_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServiceGraphOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
             422: {
                 headers: {
                     [name: string]: unknown;

@@ -15,6 +15,7 @@ from app.core.logging import get_logger
 from app.ingest.batch import decode_batch
 from app.ingest.dead_letter import dead_letter
 from app.services.ingest_writer import WriteResult, write_batch
+from app.services.service_graph import discover_edges
 from app.services.telemetry_maintenance import run_maintenance
 from app.worker.db import run_with_session
 from app.worker.runtime import run_in_session
@@ -36,6 +37,16 @@ def maintain_telemetry_partitions() -> dict[str, Any]:
         settings,
         lambda session: run_maintenance(session, settings),
         application_name="sentinelai-maintenance",
+    )
+    return asdict(result)
+
+
+@shared_task(name="graph.discover_edges")
+def discover_graph_edges() -> dict[str, Any]:
+    """Upsert observed dependency edges from the last 2 minutes of spans. Idempotent."""
+    settings = get_settings()
+    result = run_with_session(
+        settings, lambda session: discover_edges(session), application_name="sentinelai-graph"
     )
     return asdict(result)
 

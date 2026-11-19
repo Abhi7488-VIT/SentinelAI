@@ -117,6 +117,14 @@ class Span(Base):
             "start_time",
             postgresql_where=text("status_code = 2"),
         ),
+        # Dependency graph: a service's database client spans in a window (T6 externals).
+        Index(
+            "ix_spans_db_client_window",
+            "org_id",
+            "service_id",
+            "start_time",
+            postgresql_where=text("kind = 3 AND db_system IS NOT NULL"),
+        ),
         # Trace lookups use the primary key prefix (org_id, trace_id).
         {"postgresql_partition_by": "RANGE (start_time)"},
     )

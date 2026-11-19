@@ -152,6 +152,8 @@ class ServiceDependency(Base):
             postgresql_where=text("target_external IS NOT NULL"),
         ),
         Index("ix_service_dependencies_org_id_target_service_id", "org_id", "target_service_id"),
+        # Target of the composite FK from service_edges (declared edges cite their dependency).
+        UniqueConstraint("org_id", "id", name="uq_service_dependencies_org_id_id"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(

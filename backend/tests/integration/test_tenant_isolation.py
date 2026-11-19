@@ -124,7 +124,14 @@ async def test_every_org_scoped_route_hides_other_orgs(
             continue
         path = template.format(**values)
         for method in operations:
-            resp = await client.request(method.upper(), path, json={}, headers=bob.headers)
+            # Query parameters too, so routes with a required `project_id` query are reached.
+            resp = await client.request(
+                method.upper(),
+                path,
+                json={},
+                params={"project_id": project["id"]},
+                headers=bob.headers,
+            )
             _assert_404(resp)
             checked += 1
     assert checked >= 20, f"only {checked} org-scoped endpoints found"

@@ -14,7 +14,7 @@ Plan: `docs/plans/phase-3.md`, approved 2026-11-19 (D1–D6 as proposed). Work r
 | T3 OTLP endpoint | done — see below |
 | T4 Ingest writer | done — see below |
 | T5 Testbed wiring (live) | done — see below |
-| T6 Dependency graph | not started |
+| T6 Dependency graph | done — see below |
 | T7 Detection | not started |
 | T8 Correlation + incidents | not started |
 | T9 UI | not started |
@@ -132,6 +132,40 @@ Plan: `docs/plans/phase-3.md`, approved 2026-11-19 (D1–D6 as proposed). Work r
 - Retention: at that rate 3-day spans/logs approach this Codespace's free disk (16 GiB); default
   unchanged, this Codespace's `.env` uses 1 day, and compose now passes `TELEMETRY_RETENTION_*`.
 - Checks: 313 backend tests, testbed `make testbed-test` 125 passed (unchanged), ruff/mypy clean.
+
+### T6 Dependency graph (2026-11-19, live)
+- Migration `0006`: `service_edges` (declared/observed; DB CHECK `evidence_required`: declared ⇒
+  cites its `service_dependencies` row via composite FK with cascade, observed ⇒ 16-byte sample
+  trace id; composite tenant FKs on both ends), backfill of declared edges from existing
+  dependencies, new partial index `spans (org_id, service_id, start_time) WHERE kind = 3 AND
+  db_system IS NOT NULL`.
+- Declared edges are written in the same transaction as `PUT …/dependencies`. Observed edges:
+  beat task `graph.discover_edges` every 60 s over the last 2 min, per active service: callers
+  from parent/child spans across services (same project, active only), DB externals named
+  `<db.system>:<db.namespace or server.address>` — validated against the external-name pattern,
+  max 50 per service; observed edges expire after 7 days unseen. Advisory lock, one transaction,
+  upserts → repeat runs change nothing.
+- `GET /api/v1/orgs/{org_id}/service-graph?project_id=` (viewer): service + external nodes, both
+  edge sources, `truncated` flag (hard cap 5,000 edges; registry-bounded, not paginated).
+- Verified: **326 backend tests pass** (+13: evidence CHECKs, cross-tenant FK, declared sync on
+  replace/clear, discovery of service + DB edges with sample traces, repeat-run idempotency,
+  window/same-service negatives, cross-project + archived callers skipped, invalid/over-cap external
+  names skipped, expiry vs declared, lock skip, API nodes/edges, archived hidden, foreign project
+  404, 0006 backfill); isolation guard now also sends `project_id`; ruff + mypy strict clean;
+  `alembic check` clean; OpenAPI + TS types regenerated, frontend typecheck/lint pass.
+  **Live** (`docs/evidence/phase-3/t6-graph-live.md`): first scheduled run 146 ms, 5 services,
+  4 service + 4 external edges, 0 skipped; observed graph = frontend → api-gateway → {user, order},
+  order → payment, + postgresql:{orders,payments,users} and redis; a sample trace checked span by
+  span. EXPLAIN on live data: both queries use the partial window index + PK lookup, 2–7 ms.
+- Fix on the way: the backend tests read the shell's exported `.env` (retention days, and
+  Celery's `CELERY_BROKER_URL` override sent a test's tasks to the live broker); tests now drop
+  env vars that map to Settings fields (separate commit).
+- Plan deviation: graph nodes carry health + last_seen only; the last-15-min request/error counts
+  come from `service_window_stats`, which T7 creates — added there.
+- Limitations: observed `redis:redis` ≠ declared `redis:sessions` (Redis spans have no
+  `db.namespace`); `call_count` = calls in the latest 2-min window; messaging edges and HTTP calls
+  to uninstrumented hosts are not discovered; worker processes still expose no Prometheus
+  endpoint (job emits a structured `graph_discovery_done` log with counts and duration).
 
 ## Phase 2 report (2026-11-17) — testbed
 

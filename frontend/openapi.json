@@ -551,6 +551,155 @@
         "title": "ErrorResponse",
         "type": "object"
       },
+      "GraphEdge": {
+        "properties": {
+          "call_count": {
+            "description": "Observed edges: calls counted in the 2-minute discovery window that last saw the edge (not a lifetime total). Declared edges: 0.",
+            "title": "Call Count",
+            "type": "integer"
+          },
+          "declared_dependency_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Declared edges: the declared dependency this edge comes from.",
+            "title": "Declared Dependency Id"
+          },
+          "first_seen_at": {
+            "format": "date-time",
+            "title": "First Seen At",
+            "type": "string"
+          },
+          "from_node": {
+            "title": "From Node",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "last_seen_at": {
+            "format": "date-time",
+            "title": "Last Seen At",
+            "type": "string"
+          },
+          "sample_trace_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Observed edges: hex trace id of a trace showing the call.",
+            "title": "Sample Trace Id"
+          },
+          "source": {
+            "enum": [
+              "declared",
+              "observed"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "to_node": {
+            "title": "To Node",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "from_node",
+          "to_node",
+          "source",
+          "first_seen_at",
+          "last_seen_at",
+          "call_count"
+        ],
+        "title": "GraphEdge",
+        "type": "object"
+      },
+      "GraphNode": {
+        "description": "A registered service (`kind=service`) or an external system (`kind=external`).\n\n`id` is `service:<uuid>` or `external:<name>`; edges reference nodes by this id.",
+        "properties": {
+          "environment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Environment"
+          },
+          "health_status": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/HealthStatus"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "service",
+              "external"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "last_seen_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Seen At"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "service_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Service Id"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "name"
+        ],
+        "title": "GraphNode",
+        "type": "object"
+      },
       "HealthStatus": {
         "enum": [
           "unknown",
@@ -1406,6 +1555,42 @@
           }
         },
         "title": "ServiceDeployment",
+        "type": "object"
+      },
+      "ServiceGraphOut": {
+        "properties": {
+          "edges": {
+            "items": {
+              "$ref": "#/components/schemas/GraphEdge"
+            },
+            "title": "Edges",
+            "type": "array"
+          },
+          "nodes": {
+            "items": {
+              "$ref": "#/components/schemas/GraphNode"
+            },
+            "title": "Nodes",
+            "type": "array"
+          },
+          "project_id": {
+            "format": "uuid",
+            "title": "Project Id",
+            "type": "string"
+          },
+          "truncated": {
+            "description": "True if the edge list hit the server's hard limit.",
+            "title": "Truncated",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "project_id",
+          "nodes",
+          "edges",
+          "truncated"
+        ],
+        "title": "ServiceGraphOut",
         "type": "object"
       },
       "ServiceOut": {
@@ -3646,6 +3831,100 @@
         "summary": "Update Project",
         "tags": [
           "projects"
+        ]
+      }
+    },
+    "/api/v1/orgs/{org_id}/service-graph": {
+      "get": {
+        "description": "Services of a project with their declared and observed edges (both kept, by `source`).",
+        "operationId": "get_service_graph_api_v1_orgs__org_id__service_graph_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "org_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Org Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceGraphOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal error"
+          }
+        },
+        "summary": "Get Service Graph",
+        "tags": [
+          "service-graph"
         ]
       }
     },
