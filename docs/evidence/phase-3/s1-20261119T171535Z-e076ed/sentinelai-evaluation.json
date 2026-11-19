@@ -1,0 +1,121 @@
+{
+  "scenario": "db-pool-exhaustion",
+  "run_id": "20261119T171535Z-e076ed",
+  "run_status": "verified",
+  "fault_window": {
+    "start": "2026-11-19T17:17:35+00:00",
+    "end": "2026-11-19T17:22:36+00:00"
+  },
+  "run_window": {
+    "start": "2026-11-19T17:15:35+00:00",
+    "end": "2026-11-19T17:25:36+00:00"
+  },
+  "ground_truth": {
+    "expected_affected_services": [
+      "api-gateway",
+      "frontend",
+      "order-service"
+    ],
+    "unaffected_services": [
+      "payment-service",
+      "user-service"
+    ],
+    "root_cause_service": "order-service"
+  },
+  "passed": false,
+  "checks": [
+    {
+      "check": "exactly_one_incident",
+      "passed": false,
+      "expected": 1,
+      "actual": 0
+    },
+    {
+      "check": "expected_services_affected",
+      "passed": false,
+      "expected": [
+        "api-gateway",
+        "frontend",
+        "order-service"
+      ],
+      "actual": []
+    },
+    {
+      "check": "unaffected_services_excluded",
+      "passed": false,
+      "expected": "none of ['payment-service', 'user-service']",
+      "actual": []
+    },
+    {
+      "check": "grouping_is_structural",
+      "passed": false,
+      "expected": "every joined detection has >= 1 reason",
+      "actual": []
+    },
+    {
+      "check": "detected_during_fault",
+      "passed": false,
+      "expected": "first detection fired before 2026-11-19T17:22:36+00:00",
+      "actual": null
+    },
+    {
+      "check": "explanations_readable",
+      "passed": false,
+      "expected": "no problems",
+      "actual": {}
+    },
+    {
+      "check": "no_false_positives",
+      "passed": false,
+      "expected": 0,
+      "actual": 1
+    }
+  ],
+  "metrics": {
+    "time_to_first_detection_s": null,
+    "time_to_incident_s": null,
+    "incident_detected_after_fault_s": null,
+    "detections_in_incident": 0,
+    "false_positive_detections": 1,
+    "other_incidents_during_run": 1,
+    "root_cause_service_has_detection": false
+  },
+  "incident": null,
+  "incident_detections": [],
+  "incidents_in_fault_window": [],
+  "other_incidents_during_run": [
+    {
+      "number": 1,
+      "title": "Resource saturation, latency and errors in order-service, api-gateway, frontend",
+      "started_at": "2026-11-19T17:17:15Z"
+    }
+  ],
+  "false_positives": [
+    {
+      "id": "979b3005-3bd8-49ab-8c3f-cf50b7988a08",
+      "service": "order-service",
+      "rule": "resource_saturation",
+      "severity": "critical",
+      "metric": "pool_utilization",
+      "observed_value": 1.0,
+      "threshold": 0.9,
+      "started_at": "2026-11-19T17:17:15Z",
+      "fired_at": "2026-11-19T17:18:15Z",
+      "resolved_at": "2026-11-19T17:24:30Z",
+      "started_after_fault_s": -20.0,
+      "fired_after_fault_s": 40.0,
+      "explanation": "order-service: connection pool `order-service` 10/10 in use (100.0%) with 23 pending requests at 17:18:15Z (instance efc711da86fe406f84c55edc0ef88d68), at or above 90.0% with waiters for 60 s (fires after 60 s). Top exception: `sqlalchemy.exc.TimeoutError: QueuePool limit of size # overflow # reached, connection timed out, timeout # (Background \u2026` (301 spans). Sample traces: 6c52a92d\u2026, 82405cc5\u2026, 204e84e2\u2026.",
+      "explanation_problems": [],
+      "sample_trace_ids": [
+        "6c52a92d230346a0404c9deb83ecfbf9",
+        "82405cc5590577256a371d3d78148e4c",
+        "204e84e2ceba3925d84ced435a84709b",
+        "7ace54c165b1d686e38fbf6989b9355c",
+        "bd839b4f22bfa002a5927e572a10a55b"
+      ],
+      "why": [
+        "started outside the fault window"
+      ]
+    }
+  ]
+}

@@ -18,7 +18,7 @@ Plan: `docs/plans/phase-3.md`, approved 2026-11-19 (D1–D6 as proposed). Work r
 | T7 Detection | done — see below |
 | T8 Correlation + incidents | done — see below (grouping verified in tests; live S1 is T10) |
 | T9 UI | not started |
-| T10 Live acceptance + benchmarks | in progress — quiet baseline **done** (0 incidents, 0 detections, 0 pending); next: S1 run (stop and report after it) |
+| T10 Live acceptance + benchmarks | in progress — quiet baseline done; **S1 run `20261119T171535Z-e076ed`: FAIL** (timestamp bug in metric/health rules; fix proposed, awaiting go-ahead) |
 | T11 Docs + report | not started |
 
 ### T1 Registry (2026-11-19)
@@ -247,6 +247,21 @@ Plan: `docs/plans/phase-3.md`, approved 2026-11-19 (D1–D6 as proposed). Work r
   threshold; pools ≤ 1/10 used, 0 waiters; 0 new instances. Loadgen: 6,015 requests, 0 errors.
 - Evidence: `docs/evidence/phase-3/t10-quiet-baseline.md` (method, raw output). One window at one
   traffic mix: no false positive here, not a false-positive rate. Thresholds unchanged.
+
+### T10 (part 2) S1 db-pool-exhaustion, run `20261119T171535Z-e076ed` (2026-11-19, live) — FAIL
+- New harness-side evaluator `harness.evaluate incidents` (`172a834`, before the run): reads the
+  run record + SentinelAI's public API only; 17 unit tests; `make evaluate-incidents RUN=…`.
+- Harness: VERIFIED (fault 17:17:35Z → 17:22:36Z, all symptoms, payment unaffected).
+- SentinelAI: **1 incident** ("Resource saturation, latency and errors in order-service,
+  api-gateway, frontend"), 7 detections, **exactly the expected services**, payment-service and
+  user-service excluded, every join structural (shared_trace on all 6), all explanations pass the
+  readability checks, incident created 72.8 s after fault start.
+- **Evaluator: FAIL.** The first detection (order-service `resource_saturation`) is stamped
+  `started_at` 17:17:15Z, 20 s before the fault; the first saturated metric point is 17:17:43.96Z.
+  Cause: metric (and health) rules read data up to `now` but are stamped on `eval_end`
+  (now − 30 s). This puts the incident start outside the fault window and counts 1 false positive.
+  Fix proposed (evaluate all rules as of `eval_end`, tests that fail on current code, re-run
+  baseline + S1); **not applied**. Evidence: `docs/evidence/phase-3/s1-20261119T171535Z-e076ed/`.
 
 ## Phase 2 report (2026-11-17) — testbed
 
