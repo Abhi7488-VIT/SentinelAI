@@ -25,6 +25,9 @@ x-backend-env: &backend-env
   AUTH_RATE_LIMIT_ATTEMPTS: ${AUTH_RATE_LIMIT_ATTEMPTS:-10}
   AUTH_RATE_LIMIT_WINDOW_SECONDS: ${AUTH_RATE_LIMIT_WINDOW_SECONDS:-60}
   CORS_ORIGINS: ${CORS_ORIGINS:-["http://localhost:3000"]}
+  TELEMETRY_RETENTION_SPANS_DAYS: ${TELEMETRY_RETENTION_SPANS_DAYS:-3}
+  TELEMETRY_RETENTION_LOGS_DAYS: ${TELEMETRY_RETENTION_LOGS_DAYS:-3}
+  TELEMETRY_RETENTION_METRICS_DAYS: ${TELEMETRY_RETENTION_METRICS_DAYS:-7}
 
 x-backend-build: &backend-build
   context: ./backend
@@ -106,6 +109,11 @@ services:
     environment: *backend-env
     ports:
       - "127.0.0.1:8001:8001"
+    # Also on the shared network the testbed's Collector joins (testbed/docker-compose.sentinelai.yml).
+    networks:
+      default: {}
+      ingest:
+        aliases: [sentinelai-ingest]
     mem_limit: 384m
     memswap_limit: 384m
     depends_on:
@@ -198,6 +206,12 @@ services:
       retries: 6
       start_period: 20s
     restart: unless-stopped
+
+networks:
+  default: {}
+  # Created by this stack with a fixed name so the testbed can join it as an external network.
+  ingest:
+    name: sentinelai-ingest
 
 volumes:
   pgdata:

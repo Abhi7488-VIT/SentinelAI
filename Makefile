@@ -5,7 +5,7 @@ TB := ./testbed/tb.sh
 
 .PHONY: help testbed-up testbed-ui testbed-down testbed-status testbed-logs testbed-test \
 	deploy loadgen-stats loadgen-mix scenario-list scenario-validate scenario-status \
-	scenario-run scenario-start scenario-stop
+	scenario-run scenario-start scenario-stop sentinel-connect
 
 help:
 	@echo "testbed-up                 build + start the testbed, wait until healthy"
@@ -21,6 +21,8 @@ help:
 	@echo "scenario-run ID=x [SEED=n] [BASELINE=s] [OBSERVE=s] [RECOVERY=s] [DRY_RUN=1]"
 	@echo "                           full run: baseline, fault, checks, stop, recovery, verdict"
 	@echo "scenario-start ID=x / scenario-stop ID=x   inject / remove a fault by hand (no verdict)"
+	@echo "sentinel-connect [REGISTER=1]  register the shop in SentinelAI (needs its stack up), write"
+	@echo "                           per-service ingest keys to testbed/.env; then run testbed-up"
 
 testbed-up:
 	@$(TB) up
@@ -68,3 +70,6 @@ scenario-start:
 
 scenario-stop:
 	@$(TB) scenario stop $(ID)
+
+sentinel-connect:
+	@cd backend && uv run python -m scripts.connect_testbed $(if $(REGISTER),--register,)

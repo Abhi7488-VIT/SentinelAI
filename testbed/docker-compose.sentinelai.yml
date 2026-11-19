@@ -1,0 +1,18 @@
+# Overlay: connect the testbed's OTel Collector to SentinelAI's ingest (Phase 3 T5).
+# tb.sh adds this file automatically when SENTINELAI_OTLP_ENDPOINT is set in testbed/.env
+# (`make sentinel-connect` sets it and the per-service keys). SentinelAI's stack must be running:
+# its compose file creates the shared network `sentinelai-ingest`.
+services:
+  otel-collector:
+    networks: [shop, sentinelai-ingest]
+    environment:
+      SENTINELAI_KEY_FRONTEND: ${SENTINELAI_KEY_FRONTEND:-}
+      SENTINELAI_KEY_API_GATEWAY: ${SENTINELAI_KEY_API_GATEWAY:-}
+      SENTINELAI_KEY_USER_SERVICE: ${SENTINELAI_KEY_USER_SERVICE:-}
+      SENTINELAI_KEY_ORDER_SERVICE: ${SENTINELAI_KEY_ORDER_SERVICE:-}
+      SENTINELAI_KEY_PAYMENT_SERVICE: ${SENTINELAI_KEY_PAYMENT_SERVICE:-}
+
+networks:
+  sentinelai-ingest:
+    external: true
+    name: sentinelai-ingest

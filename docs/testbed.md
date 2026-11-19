@@ -80,6 +80,28 @@ Backend behaviour the checks depend on (all found live):
   instrumentation), so connection failures are visible in client spans and logs, not that metric.
 - Each service exports spans in batches: a checkout trace is only complete ~30 s after it ends.
 
+### Sending telemetry to SentinelAI (Phase 3)
+
+```
+docker compose up -d                 # SentinelAI stack (repo root); creates network sentinelai-ingest
+make sentinel-connect REGISTER=1     # register project `shop` + 5 services, write per-service keys
+make testbed-up                      # Collector restarts with the SentinelAI overlay
+```
+
+- `make sentinel-connect` uses `SENTINELAI_EMAIL` / `SENTINELAI_PASSWORD` (environment or the
+  repo-root `.env`), applies `testbed/sentinelai-registry.json` through SentinelAI's public API
+  (services, environment `testbed`, declared dependencies, container memory limits), rotates one
+  ingest key per service and writes `SENTINELAI_OTLP_ENDPOINT` + `SENTINELAI_KEY_*` to
+  `testbed/.env` (gitignored, mode 600). It is idempotent. The registry holds no scenario or fault
+  information (ADR 0003).
+- When `SENTINELAI_OTLP_ENDPOINT` is set, `tb.sh` adds `docker-compose.sentinelai.yml` (the
+  Collector joins `sentinelai-ingest`) and the Collector loads `infra/otel/collector.sentinelai.yaml`:
+  `routing` connectors send each `service.name` to its own `otlphttp` exporter with that service's
+  key; deploy events are routed by `deployment.service.name` + `deployment.id` (the event name may
+  arrive in the record's `event_name` field, not as an attribute). Exporter queues are bounded in
+  bytes (8 MiB each).
+- Prometheus, Loki and Jaeger keep receiving everything as before.
+
 ## 4. Load generator
 
 Seeded (`SEED`, default 42) arrivals and journeys for 200 of the 5,000 seeded users: browse,

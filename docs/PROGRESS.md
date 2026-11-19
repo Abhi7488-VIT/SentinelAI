@@ -13,7 +13,7 @@ Plan: `docs/plans/phase-3.md`, approved 2026-11-19 (D1–D6 as proposed). Work r
 | T2 Telemetry storage | done — see below |
 | T3 OTLP endpoint | done — see below |
 | T4 Ingest writer | done — see below |
-| T5 Testbed wiring (live) | not started |
+| T5 Testbed wiring (live) | done — see below |
 | T6 Dependency graph | not started |
 | T7 Detection | not started |
 | T8 Correlation + incidents | not started |
@@ -113,6 +113,25 @@ Plan: `docs/plans/phase-3.md`, approved 2026-11-19 (D1–D6 as proposed). Work r
   **Live** (`docs/evidence/phase-3/t4-writer-live.md`): duplicate batch → no duplicates; Postgres
   stopped 12.5 s → writer retried 4× and the batch landed (100/100 spans); uncached key with DB
   down → 503.
+
+### T5 Testbed wiring (2026-11-19, live)
+- Shared Docker network `sentinelai-ingest` (created by SentinelAI's compose; `ingest` has alias
+  `sentinelai-ingest`); testbed overlay `docker-compose.sentinelai.yml`, added by `tb.sh` when
+  `SENTINELAI_OTLP_ENDPOINT` is set. Collector overlay: `routing` connectors → one `otlphttp`
+  exporter per service with that service's key; deploy events routed by
+  `deployment.service.name` + `deployment.id`; exporter queues bounded at 8 MiB each.
+- `make sentinel-connect [REGISTER=1]` (`backend/scripts/connect_testbed.py`): applies
+  `testbed/sentinelai-registry.json` via the public API (idempotent), rotates per-service keys,
+  writes `testbed/.env`. Registry holds no scenario information (integrity guard passes).
+- **Verified live** (`docs/evidence/phase-3/t5-testbed-wiring.md`): rows from all 5 services for
+  spans, logs and metrics, 0 rejections; deploy round trip → 4 `deployments` rows (after fixing the
+  route: the first round trip's 4 events were never delivered — the emitter's handler puts the
+  event name in `LogRecord.event_name`, not an attribute; unit test added). Freshness lag p50
+  3.71 s / p95 6.68 s / max 8.48 s (upper bound on pipeline lag). Storage ~196 MiB per hour of
+  baseline (~268k spans/h).
+- Retention: at that rate 3-day spans/logs approach this Codespace's free disk (16 GiB); default
+  unchanged, this Codespace's `.env` uses 1 day, and compose now passes `TELEMETRY_RETENTION_*`.
+- Checks: 313 backend tests, testbed `make testbed-test` 125 passed (unchanged), ruff/mypy clean.
 
 ## Phase 2 report (2026-11-17) — testbed
 
@@ -214,7 +233,7 @@ compose, tests), `.github/workflows/testbed-live.yml`, `.github/workflows/testbe
 |---|---|---|
 | 1. Foundation | **Complete, merged to main (2026-11-17)** | Plan: `docs/plans/phase-1.md`. |
 | 2. Testbed | **Complete, merged to main (PR #1)** | Plan: `docs/plans/phase-2.md`; ADR 0003 accepted; live verification moved to Codespaces/CI (ADR 0004, `docs/codespaces.md`). |
-| 3. Incident management | **In progress** — T1–T4 done | Plan: `docs/plans/phase-3.md` (approved 2026-11-19). |
+| 3. Incident management | **In progress** — T1–T5 done | Plan: `docs/plans/phase-3.md` (approved 2026-11-19). |
 | 4. Investigation engine | Not started | |
 | 5. Recovery | Not started | |
 | 6. Hardening + evaluation | Not started | |

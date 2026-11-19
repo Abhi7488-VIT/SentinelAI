@@ -282,6 +282,22 @@ def test_deployment_events_are_change_records_for_their_target_service() -> None
     assert batch.rejected == {"service_mismatch": 2}
 
 
+def test_deployment_event_name_in_the_record_field() -> None:
+    """The OTel logging handler may put `event.name` into LogRecord.event_name (seen live)."""
+    record = f.log_record(
+        "deployment started",
+        attributes={
+            "deployment.id": "d2",
+            "deployment.service.name": "order-service",
+            "deployment.status": "in_progress",
+        },
+    )
+    record.event_name = "deployment"
+    batch = normalize_logs(f.logs_request("deploy-pipeline", [record]), P, _window())
+    assert [(d.deployment_id, d.status) for d in batch.deployments] == [("d2", "in_progress")]
+    assert batch.rejected == {}
+
+
 # ---- metrics -----------------------------------------------------------------------------------
 
 
