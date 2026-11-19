@@ -18,7 +18,7 @@ Plan: `docs/plans/phase-3.md`, approved 2026-11-19 (D1–D6 as proposed). Work r
 | T7 Detection | done — see below |
 | T8 Correlation + incidents | done — see below (grouping verified in tests; live S1 is T10) |
 | T9 UI | not started |
-| T10 Live acceptance + benchmarks | not started — **stop and report** after the S1 run and after the 10-min quiet baseline |
+| T10 Live acceptance + benchmarks | in progress — quiet baseline **done** (0 incidents, 0 detections, 0 pending); next: S1 run (stop and report after it) |
 | T11 Docs + report | not started |
 
 ### T1 Registry (2026-11-19)
@@ -237,6 +237,16 @@ Plan: `docs/plans/phase-3.md`, approved 2026-11-19 (D1–D6 as proposed). Work r
   green.
 - Limitations: a user resolving an incident in the same instant a tick links a detection to it
   is not serialized.
+
+### T10 (part 1) Quiet baseline (2026-11-19, live)
+- 10 min, 16:54:52Z → 17:04:56Z, no scenario active, loadgen `baseline`, after > 60 min of
+  rollups (all latency baselines had 30 usable minutes; nothing `warming_up`).
+- **0 incidents, 0 detections; 0 of 2,360 detector samples (every 5 s) were anything but
+  `ok`/`clear`** — no rule entered `pending`. 40 ticks (none skipped, no errors), p50 230 ms,
+  p95 384 ms, max 526 ms. Headroom: error ratio 0 (fire 5 %); worst p95 0.34× the latency fire
+  threshold; pools ≤ 1/10 used, 0 waiters; 0 new instances. Loadgen: 6,015 requests, 0 errors.
+- Evidence: `docs/evidence/phase-3/t10-quiet-baseline.md` (method, raw output). One window at one
+  traffic mix: no false positive here, not a false-positive rate. Thresholds unchanged.
 
 ## Phase 2 report (2026-11-17) — testbed
 
