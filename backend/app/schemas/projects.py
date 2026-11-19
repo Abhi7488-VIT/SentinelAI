@@ -51,3 +51,4 @@ class ProjectOut(APIModel):
     created_by: uuid.UUID | None
     created_at: datetime
     updated_at: datetime
+    archived_at: datetime | None

@@ -16,6 +16,7 @@ const project = (overrides: Partial<Project> = {}): Project => ({
   created_by: null,
   created_at: "2026-11-17T09:30:00Z",
   updated_at: "2026-11-17T09:30:00Z",
+  archived_at: null,
   ...overrides,
 });
 

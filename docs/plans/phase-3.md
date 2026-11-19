@@ -1,6 +1,7 @@
 # Phase 3 — Incident management (plan, revision 1)
 
-Status: **DRAFT — awaiting approval.** No code is written until this plan is approved.
+Status: **APPROVED 2026-11-19** (revision 1): decisions D1–D6 as proposed, plus the incident detail
+page, the services/keys page and project archive.
 Scope: service registry + ingest keys, OTLP/HTTP ingestion, telemetry storage, dependency graph,
 deterministic detection, correlation into incidents, incident APIs and UI.
 

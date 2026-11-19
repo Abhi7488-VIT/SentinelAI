@@ -18,6 +18,9 @@ EXPECTED_TABLES = {
     "projects",
     "refresh_tokens",
     "audit_logs",
+    "services",
+    "service_dependencies",
+    "service_api_keys",
 }
 
 
@@ -103,4 +106,101 @@ async def test_member_role_check(engine: AsyncEngine) -> None:
             "INSERT INTO organization_members (org_id, user_id, role) VALUES (:o, :u, 'root')",
             o=org,
             u=user,
+        )
+
+
+async def _two_orgs_with_projects(engine: AsyncEngine) -> tuple[uuid.UUID, ...]:
+    org_a, org_b, proj_a, proj_b = (uuid.uuid4() for _ in range(4))
+    await _exec(
+        engine,
+        "INSERT INTO organizations (id, name, slug) VALUES (:a, 'A', 'org-a'), (:b, 'B', 'org-b')",
+        a=org_a,
+        b=org_b,
+    )
+    await _exec(
+        engine,
+        "INSERT INTO projects (id, org_id, name, slug) "
+        "VALUES (:pa, :a, 'P', 'p'), (:pb, :b, 'P', 'p')",
+        pa=proj_a,
+        a=org_a,
+        pb=proj_b,
+        b=org_b,
+    )
+    return org_a, org_b, proj_a, proj_b
+
+
+async def test_service_cannot_reference_another_orgs_project(engine: AsyncEngine) -> None:
+    org_a, _org_b, _proj_a, proj_b = await _two_orgs_with_projects(engine)
+    with pytest.raises(IntegrityError, match="fk_services_project"):
+        await _exec(
+            engine,
+            "INSERT INTO services (org_id, project_id, name, environment) "
+            "VALUES (:o, :p, 'svc', 'production')",
+            o=org_a,
+            p=proj_b,
+        )
+
+
+async def test_dependency_and_key_cannot_cross_tenants(engine: AsyncEngine) -> None:
+    org_a, org_b, proj_a, proj_b = await _two_orgs_with_projects(engine)
+    svc_a, svc_b = uuid.uuid4(), uuid.uuid4()
+    insert = (
+        "INSERT INTO services (id, org_id, project_id, name, environment) "
+        "VALUES (:id, :o, :p, 'svc', 'production')"
+    )
+    await _exec(engine, insert, id=svc_a, o=org_a, p=proj_a)
+    await _exec(engine, insert, id=svc_b, o=org_b, p=proj_b)
+    with pytest.raises(IntegrityError, match="fk_service_dependencies_target"):
+        await _exec(
+            engine,
+            "INSERT INTO service_dependencies (org_id, service_id, target_service_id) "
+            "VALUES (:o, :s, :t)",
+            o=org_a,
+            s=svc_a,
+            t=svc_b,
+        )
+    with pytest.raises(IntegrityError, match="fk_service_api_keys_service"):
+        await _exec(
+            engine,
+            "INSERT INTO service_api_keys (org_id, service_id, name, prefix, secret_hash) "
+            "VALUES (:o, :s, 'k', '0123456789ab', decode(repeat('00', 32), 'hex'))",
+            o=org_a,
+            s=svc_b,
+        )
+
+
+@pytest.mark.parametrize(
+    ("target_service", "external", "constraint"),
+    [
+        (False, None, "ck_service_dependencies_one_target"),
+        (True, "pg:a", "ck_service_dependencies_one_target"),
+        ("self", None, "ck_service_dependencies_no_self_edge"),
+        (False, "has space", "ck_service_dependencies_external_format"),
+    ],
+)
+async def test_dependency_checks(
+    engine: AsyncEngine, target_service: object, external: str | None, constraint: str
+) -> None:
+    org_a, _org_b, proj_a, _proj_b = await _two_orgs_with_projects(engine)
+    svc, other = uuid.uuid4(), uuid.uuid4()
+    for sid, name in ((svc, "a"), (other, "b")):
+        await _exec(
+            engine,
+            "INSERT INTO services (id, org_id, project_id, name, environment) "
+            "VALUES (:id, :o, :p, :n, 'production')",
+            id=sid,
+            o=org_a,
+            p=proj_a,
+            n=name,
+        )
+    target = svc if target_service == "self" else (other if target_service else None)
+    with pytest.raises(IntegrityError, match=constraint):
+        await _exec(
+            engine,
+            "INSERT INTO service_dependencies (org_id, service_id, target_service_id, "
+            "target_external) VALUES (:o, :s, :t, :e)",
+            o=org_a,
+            s=svc,
+            t=target,
+            e=external,
         )

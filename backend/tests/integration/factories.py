@@ -65,3 +65,35 @@ async def create_project(
     assert resp.status_code == 201, resp.text
     body: dict[str, Any] = resp.json()
     return body
+
+
+async def create_service(
+    client: httpx.AsyncClient,
+    actor: Actor,
+    org_id: str,
+    project_id: str,
+    name: str = "order-service",
+    environment: str = "production",
+    **extra: Any,
+) -> dict[str, Any]:
+    resp = await client.post(
+        f"/api/v1/orgs/{org_id}/services",
+        json={"project_id": project_id, "name": name, "environment": environment, **extra},
+        headers=actor.headers,
+    )
+    assert resp.status_code == 201, resp.text
+    body: dict[str, Any] = resp.json()
+    return body
+
+
+async def create_api_key(
+    client: httpx.AsyncClient, actor: Actor, org_id: str, service_id: str, name: str = "collector"
+) -> dict[str, Any]:
+    resp = await client.post(
+        f"/api/v1/orgs/{org_id}/services/{service_id}/api-keys",
+        json={"name": name},
+        headers=actor.headers,
+    )
+    assert resp.status_code == 201, resp.text
+    body: dict[str, Any] = resp.json()
+    return body

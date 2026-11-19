@@ -63,6 +63,9 @@ routes, failing closed. Details: ADR 0001.
 ## Data model (Phase 1)
 
 `users`, `organizations`, `organization_members`, `projects`, `refresh_tokens`, `audit_logs`.
+Phase 3 adds the service registry: `services` (per project; `name` = OTel `service.name`),
+`service_dependencies` (declared edges) and `service_api_keys` (per-service ingest keys, SHA-256 at
+rest). Projects and services are archived, never hard-deleted; archiving revokes ingest keys.
 Tenant-owned rows carry `org_id`; `projects` has `UNIQUE (org_id, id)` so later tables can use
 composite foreign keys that cannot cross tenants. The plan (`docs/plans/phase-1.md` §2.3) lists the
 tables expected in later phases.

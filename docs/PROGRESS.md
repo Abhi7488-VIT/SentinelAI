@@ -2,6 +2,45 @@
 
 Read at the start of every session. Updated at the end of each phase.
 
+## Phase 3 — in progress (branch `phase-3-incident-management`)
+
+Plan: `docs/plans/phase-3.md`, approved 2026-11-19 (D1–D6 as proposed). Work runs in the Codespace
+(4 cores, 15 GiB); SentinelAI's Postgres/Redis run next to the testbed.
+
+| Task | Status |
+|---|---|
+| T1 Registry | done — see below |
+| T2 Telemetry storage | not started |
+| T3 OTLP endpoint | not started |
+| T4 Ingest writer | not started |
+| T5 Testbed wiring (live) | not started |
+| T6 Dependency graph | not started |
+| T7 Detection | not started |
+| T8 Correlation + incidents | not started |
+| T9 UI | not started |
+| T10 Live acceptance + benchmarks | not started — **stop and report** after the S1 run and after the 10-min quiet baseline |
+| T11 Docs + report | not started |
+
+### T1 Registry (2026-11-19)
+- Migration `0002`: `services`, `service_dependencies`, `service_api_keys`; `projects.archived_at`.
+  Composite FKs `(org_id, parent_id)` on every child (DB-level tests prove cross-tenant inserts fail).
+- `/api/v1/orgs/{org_id}/services` CRUD (DELETE = archive), `PUT …/dependencies` (replace set; same
+  project, active targets only), `…/api-keys` list/create/revoke (admin). Keys `sai_<prefix>_<secret>`,
+  SHA-256 at rest, plaintext once (`Cache-Control: no-store`), max 10 active per service, audit rows
+  carry the prefix only. Repo URLs with credentials are rejected.
+- Project DELETE now archives: project read-only (409 `project_archived`), its services archived and
+  their keys revoked in one transaction; lists hide archived unless `include_archived=true`.
+- ADR 0003 guard: `tests/unit/test_integrity_boundary.py` fails if `backend/app|migrations|scripts`
+  mention ground truth, the harness, run records or any scenario id (mutation-checked: planting
+  `db-pool-exhaustion` in a comment made it fail).
+- Verified: ruff + format clean, mypy strict clean (100 files), **229 backend tests passed** (160
+  before T1); OpenAPI-driven isolation guard now covers the new routes (≥ 20 org-scoped operations);
+  frontend types regenerated, typecheck/lint/12 tests/build pass. `EXPLAIN` (seqscan disabled) shows
+  every new list query using an `org_id`-prefixed index; registry tables are small (tens–hundreds of
+  rows per org), so the remaining filters were not given dedicated indexes.
+- Limitations: no project/service un-archive endpoint; the 10-active-keys limit is not race-proof
+  under concurrent creates (soft limit); key `last_used_at` is written from T3 on.
+
 ## Phase 2 report (2026-11-17) — testbed
 
 All live work ran in the Codespace (4 cores, 16 GB; ADR 0004). Branch `phase-2-testbed`; Phase 3 not
@@ -101,8 +140,8 @@ compose, tests), `.github/workflows/testbed-live.yml`, `.github/workflows/testbe
 | Phase | Status | Notes |
 |---|---|---|
 | 1. Foundation | **Complete, merged to main (2026-11-17)** | Plan: `docs/plans/phase-1.md`. |
-| 2. Testbed | **Complete on `phase-2-testbed` (2026-11-17), awaiting review** — not merged | Plan: `docs/plans/phase-2.md`; ADR 0003 accepted; live verification moved to Codespaces/CI (ADR 0004, `docs/codespaces.md`). |
-| 3. Incident management | Not started | |
+| 2. Testbed | **Complete, merged to main (PR #1)** | Plan: `docs/plans/phase-2.md`; ADR 0003 accepted; live verification moved to Codespaces/CI (ADR 0004, `docs/codespaces.md`). |
+| 3. Incident management | **In progress** — T1 done | Plan: `docs/plans/phase-3.md` (approved 2026-11-19). |
 | 4. Investigation engine | Not started | |
 | 5. Recovery | Not started | |
 | 6. Hardening + evaluation | Not started | |

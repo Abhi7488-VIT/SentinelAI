@@ -4,14 +4,19 @@ from app.models.audit_log import AuditLog
 from app.models.organization import Organization, OrganizationMember, Role
 from app.models.project import Project
 from app.models.refresh_token import RefreshToken
+from app.models.service import HealthStatus, Service, ServiceApiKey, ServiceDependency
 from app.models.user import User
 
 __all__ = [
     "AuditLog",
+    "HealthStatus",
     "Organization",
     "OrganizationMember",
     "Project",
     "RefreshToken",
     "Role",
+    "Service",
+    "ServiceApiKey",
+    "ServiceDependency",
     "User",
 ]

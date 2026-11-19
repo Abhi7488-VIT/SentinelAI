@@ -34,11 +34,22 @@ async def test_project_crud(client: httpx.AsyncClient) -> None:
     assert patched.json()["description"] is None
     assert patched.json()["slug"] == "checkout-api"  # slug is stable
 
+    # DELETE archives: the project stays readable, becomes read-only, and leaves the list.
     deleted = await client.delete(f"{base}/{created['id']}", headers=alice.headers)
     assert deleted.status_code == 204
-    gone = await client.get(f"{base}/{created['id']}", headers=alice.headers)
-    assert gone.status_code == 404
-    assert gone.json()["error"]["code"] == "project_not_found"
+    archived = await client.get(f"{base}/{created['id']}", headers=alice.headers)
+    assert archived.status_code == 200
+    assert archived.json()["archived_at"] is not None
+    again = await client.delete(f"{base}/{created['id']}", headers=alice.headers)
+    assert again.status_code == 204  # idempotent
+    patch = await client.patch(f"{base}/{created['id']}", json={"name": "x"}, headers=alice.headers)
+    assert patch.status_code == 409
+    assert patch.json()["error"]["code"] == "project_archived"
+    assert (await client.get(base, headers=alice.headers)).json()["items"] == []
+    with_archived = await client.get(
+        base, params={"include_archived": "true"}, headers=alice.headers
+    )
+    assert [p["id"] for p in with_archived.json()["items"]] == [created["id"]]
 
 
 async def test_slug_conflicts(client: httpx.AsyncClient) -> None:
