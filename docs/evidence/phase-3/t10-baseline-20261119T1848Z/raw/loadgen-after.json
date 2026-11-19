@@ -1,0 +1,1 @@
+{"mix":"baseline","seed":42,"mix_started_at":1795111090.6640522,"in_flight":1,"dropped":0,"totals":{"requests":35909,"errors":262,"error_rate":0.0073,"declined":108,"p50_ms":10.9,"p95_ms":80.4,"by_action":{"product":7167,"account":5418,"login":1803,"browse":17899,"checkout":3622},"errors_by_action":{"product":57,"account":38,"login":13,"browse":133,"checkout":21}}}

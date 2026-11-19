@@ -1,0 +1,22 @@
+              ts               |                 name                  |  st  | value 
+-------------------------------+---------------------------------------+------+-------
+ 2026-11-19 18:47:33.217505+00 | db.client.connection.count            | used |     0
+ 2026-11-19 18:47:33.217505+00 | db.client.connection.pending_requests |      |     0
+ 2026-11-19 18:47:43.226983+00 | db.client.connection.count            | used |     0
+ 2026-11-19 18:47:43.226983+00 | db.client.connection.pending_requests |      |     0
+ 2026-11-19 18:47:53.232194+00 | db.client.connection.count            | used |     0
+ 2026-11-19 18:47:53.232194+00 | db.client.connection.pending_requests |      |     0
+ 2026-11-19 18:48:03.236097+00 | db.client.connection.count            | used |     0
+ 2026-11-19 18:48:03.236097+00 | db.client.connection.pending_requests |      |     0
+ 2026-11-19 18:48:13.246273+00 | db.client.connection.count            | used |     1
+ 2026-11-19 18:48:13.246273+00 | db.client.connection.pending_requests |      |     1
+ 2026-11-19 18:48:23.256546+00 | db.client.connection.count            | used |     0
+ 2026-11-19 18:48:23.256546+00 | db.client.connection.pending_requests |      |     0
+ 2026-11-19 18:48:33.263128+00 | db.client.connection.count            | used |     0
+ 2026-11-19 18:48:33.263128+00 | db.client.connection.pending_requests |      |     0
+ 2026-11-19 18:48:43.274606+00 | db.client.connection.count            | used |     0
+ 2026-11-19 18:48:43.274606+00 | db.client.connection.pending_requests |      |     0
+ 2026-11-19 18:48:53.280346+00 | db.client.connection.count            | used |     0
+ 2026-11-19 18:48:53.280346+00 | db.client.connection.pending_requests |      |     0
+(18 rows)
+

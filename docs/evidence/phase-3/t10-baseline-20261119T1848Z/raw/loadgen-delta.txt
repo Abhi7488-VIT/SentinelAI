@@ -1,0 +1,2 @@
+mix: baseline -> baseline | seed 42->42 | requests: 6025 | errors: 0 | declined: 19 | dropped: 0
+errors_by_action delta: {'product': 0, 'account': 0, 'login': 0, 'browse': 0, 'checkout': 0}
