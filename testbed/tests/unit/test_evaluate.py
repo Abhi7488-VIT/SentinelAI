@@ -69,8 +69,26 @@ def detection(
 
 
 def incident(
-    number: int, started: str, dets: list[dict[str, Any]], reasons: list[list[dict[str, Any]]]
+    number: int,
+    started: str,
+    dets: list[dict[str, Any]],
+    reasons: list[list[dict[str, Any]]],
+    *,
+    opener: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    """`opener` (default: the first detection) is named by the `created` event, as the API does."""
+    opener = opener or dets[0]
+    events = [
+        {"id": 10 * number + 1, "type": "created", "payload": {"detection_id": opener["id"]}},
+        *(
+            {
+                "id": 10 * number + 2 + k,
+                "type": "detection_added",
+                "payload": {"detection_id": d["id"]},
+            }
+            for k, d in enumerate(dets)
+        ),
+    ]
     names = sorted({SVC[d["service_id"]] for d in dets})
     return {
         "id": f"i-{number}",
@@ -86,6 +104,7 @@ def incident(
             {"detection": d, "reasons": r, "score": 3 * len(r)}
             for d, r in zip(dets, reasons, strict=True)
         ],
+        "events": events,
     }
 
 
@@ -198,6 +217,51 @@ def test_join_without_a_reason_fails_the_structural_check() -> None:
     assert checks(result)["grouping_is_structural"] is False
 
 
+def simultaneous_case(opener_reasons: list[dict[str, Any]]) -> tuple[ev.ApiData, list[Any]]:
+    """Run 20261119T185934Z-335bba's shape: every detection starts in the same bucket, so the
+    API's (started_at, id) order puts the opener (frontend error_rate here) in the middle."""
+    at, fired = "2031-01-01T12:02:15+00:00", "2031-01-01T12:03:15+00:00"
+    # ids are the live run's UUID prefixes, so the API's tie-break order is the same
+    gw = detection("s-gw", at, fired) | {"id": "bc9f21dd"}
+    front = detection("s-front", at, fired) | {"id": "510ef464"}
+    order = detection("s-order", at, fired, rule="resource_saturation") | {"id": "01819c6b"}
+    listed = sorted([gw, front, order], key=lambda d: (d["started_at"], d["id"]))
+    assert listed[0] is not front  # the opener is not first, as in the live run
+    reasons = [opener_reasons if d is front else SHARED for d in listed]
+    inc = incident(1, at, listed, reasons, opener=front)
+    return ev.ApiData(dict(SVC), [inc], listed), listed
+
+
+def test_opener_is_taken_from_the_created_event_when_detections_start_together() -> None:
+    data, listed = simultaneous_case(opener_reasons=[])
+    result = ev.evaluate_run(record(), data)
+    assert result["passed"], result["checks"]
+    opener = next(d for d in listed if d["service_id"] == "s-front")
+    assert result["opener_detection_id"] == opener["id"]
+    structural = next(c for c in result["checks"] if c["check"] == "grouping_is_structural")
+    assert opener["id"] not in structural["actual"]
+    assert sorted(structural["actual"]) == sorted(d["id"] for d in listed if d is not opener)
+
+
+def test_a_non_opener_without_reasons_fails_even_when_listed_first() -> None:
+    data, listed = simultaneous_case(opener_reasons=[])
+    inc = copy.deepcopy(data.incidents[0])
+    inc["detections"][0]["reasons"] = []  # listed first, but not the opener
+    result = ev.evaluate_run(record(), ev.ApiData(data.services, [inc], data.detections))
+    assert checks(result)["grouping_is_structural"] is False
+    structural = next(c for c in result["checks"] if c["check"] == "grouping_is_structural")
+    assert structural["actual"][listed[0]["id"]] == 0
+
+
+def test_without_a_created_event_no_detection_is_exempt() -> None:
+    data = good_case()
+    inc = copy.deepcopy(data.incidents[0])
+    inc["events"] = [e for e in inc["events"] if e["type"] != "created"]
+    result = ev.evaluate_run(record(), ev.ApiData(data.services, [inc], data.detections))
+    assert result["opener_detection_id"] is None
+    assert checks(result)["grouping_is_structural"] is False  # the opener's [] now counts
+
+
 @pytest.mark.parametrize(
     ("text", "problem"),
     [
@@ -270,9 +334,17 @@ def fake_sentinel(data: ev.ApiData, seen: list[str]) -> httpx.MockTransport:
             q = parse_qs(request.url.query.decode())
             assert {"from", "to", "project_id"} <= set(q)
             return page([{"id": i["id"]} for i in data.incidents], request)
+        if path.startswith("/api/v1/orgs/org-1/incidents/") and path.endswith("/events"):
+            inc = next(i for i in data.incidents if i["id"] == path.split("/")[-2])
+            q = parse_qs(request.url.query.decode())
+            after = int(q.get("after_id", ["0"])[0])
+            rest = [e for e in inc["events"] if e["id"] > after]
+            items = rest[:2]  # force pagination
+            nxt = str(items[-1]["id"]) if len(rest) > 2 else None
+            return httpx.Response(200, json={"items": items, "next_cursor": nxt})
         if path.startswith("/api/v1/orgs/org-1/incidents/"):
             inc = next(i for i in data.incidents if i["id"] == path.rsplit("/", 1)[1])
-            return httpx.Response(200, json=inc)
+            return httpx.Response(200, json={k: v for k, v in inc.items() if k != "events"})
         if path == "/api/v1/orgs/org-1/detections":
             other = {**data.detections[0], "id": "foreign", "service_id": "s-elsewhere"}
             return page([*data.detections, other], request)
@@ -290,6 +362,8 @@ def test_collect_follows_pagination_and_keeps_only_the_projects_services() -> No
         got = api.collect("shop", ev.ts("2031-01-01T12:00:00Z"), ev.ts("2031-01-01T12:10:00Z"))
     assert got.services == data.services
     assert [i["id"] for i in got.incidents] == ["i-1"]
+    assert got.incidents[0]["events"] == data.incidents[0]["events"]  # 4 events over 2 pages
+    assert seen.count("GET /api/v1/orgs/org-1/incidents/i-1/events") == 2
     assert [d["id"] for d in got.detections] == [d["id"] for d in data.detections]
     assert seen.count("GET /api/v1/orgs/org-1/services") == 3  # 5 services, 2 per page
 

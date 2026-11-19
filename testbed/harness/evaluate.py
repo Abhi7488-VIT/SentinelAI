@@ -13,7 +13,11 @@ Checks (fixed before any run; nothing here is tuned to a result):
 - `exactly_one_incident`  one incident whose start lies in the fault window, not several;
 - `expected_services_affected`  every `expected_affected_services` entry is an affected service;
 - `unaffected_services_excluded`  no `unaffected_services` entry is an affected service;
-- `grouping_is_structural`  every detection that joined carries at least one grouping reason;
+- `grouping_is_structural`  every detection that joined carries at least one grouping reason.
+  Only the incident's opener is exempt, and the opener is the `detection_id` of the incident's
+  `created` event (not the first detection in the list: the API orders detections by
+  `(started_at, id)`, so detections that start together sort by UUID). With no `created` event
+  no detection is exempt;
 - `detected_during_fault`  the first detection fired before the fault ended;
 - `explanations_readable`  every explanation passes mechanical readability checks (below);
 - `no_false_positives`  no run detection is a false positive.
@@ -73,8 +77,17 @@ class ApiData:
     """What the evaluator needs from SentinelAI, as returned by its public API."""
 
     services: dict[str, str]  # service id -> name (the project's services)
-    incidents: list[dict[str, Any]]  # incident details (with detections and reasons)
+    incidents: list[dict[str, Any]]  # incident details (with detections, reasons and `events`)
     detections: list[dict[str, Any]]  # every detection that started during the run
+
+
+def opener_detection_id(incident: dict[str, Any]) -> str | None:
+    """The detection that opened the incident, from its first `created` event (None if absent)."""
+    for event in sorted(incident.get("events", []), key=lambda e: e["id"]):
+        if event["type"] == "created":
+            opener = event["payload"].get("detection_id")
+            return str(opener) if opener is not None else None
+    return None
 
 
 def _check(name: str, passed: bool, expected: Any, actual: Any) -> dict[str, Any]:
@@ -116,6 +129,7 @@ def evaluate_run(record: dict[str, Any], data: ApiData) -> dict[str, Any]:
 
     members: list[dict[str, Any]] = []
     affected: list[str] = []
+    opener_id = opener_detection_id(incident) if incident is not None else None
     if incident is not None:
         affected = sorted(s["name"] for s in incident["services"])
         for m in incident["detections"]:
@@ -140,7 +154,7 @@ def evaluate_run(record: dict[str, Any], data: ApiData) -> dict[str, Any]:
             false_positives.append({**det_view(d), "why": why})
 
     first_fired = min((ts(m["fired_at"]) for m in members), default=None)
-    joined = members[1:] if members else []
+    joined = [m for m in members if m["id"] != opener_id]
     checks = [
         _check("exactly_one_incident", len(in_fault) == 1, 1, len(in_fault)),
         _check(
@@ -159,7 +173,7 @@ def evaluate_run(record: dict[str, Any], data: ApiData) -> dict[str, Any]:
             "grouping_is_structural",
             incident is not None and all(m["reasons"] for m in joined),
             "every joined detection has >= 1 reason",
-            [len(m["reasons"]) for m in joined],
+            {m["id"]: len(m["reasons"]) for m in joined},
         ),
         _check(
             "detected_during_fault",
@@ -224,6 +238,7 @@ def evaluate_run(record: dict[str, Any], data: ApiData) -> dict[str, Any]:
             if incident
             else None
         ),
+        "opener_detection_id": opener_id,
         "incident_detections": members,
         "incidents_in_fault_window": [
             {"number": i["number"], "title": i["title"], "started_at": i["started_at"]}
@@ -277,6 +292,16 @@ class SentinelApi:
             if not cursor:
                 return
 
+    def events(self, path: str) -> Iterator[dict[str, Any]]:
+        """An incident's timeline; this endpoint pages by `after_id` (the last event id)."""
+        after_id = None
+        while True:
+            page = self.get(path, limit=100, after_id=after_id)
+            yield from page["items"]
+            after_id = page["next_cursor"]
+            if not after_id:
+                return
+
     def project(self, slug: str) -> tuple[str, str]:
         for org in self.pages("/api/v1/orgs"):
             for proj in self.pages(f"/api/v1/orgs/{org['id']}/projects"):
@@ -294,6 +319,7 @@ class SentinelApi:
         window = {"from": start.isoformat(), "to": end.isoformat()}
         incidents = [
             self.get(f"{base}/incidents/{i['id']}")
+            | {"events": list(self.events(f"{base}/incidents/{i['id']}/events"))}
             for i in self.pages(f"{base}/incidents", project_id=project, **window)
         ]
         detections = [
