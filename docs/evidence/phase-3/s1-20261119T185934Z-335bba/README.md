@@ -27,8 +27,24 @@ db-pool-exhaustion run 20261119T185934Z-335bba (harness: verified): FAIL
   window, 0 false positives, first detection fired 71 s after fault start.
 - **New failure: `grouping_is_structural`.** Reason counts per joined detection were
   `[1, 0, 4, 3, 4, 4]`, so one detection joined the incident with **0** structural reasons.
-  **Not analysed yet** (usage limit reached): which detection that is, and why correlation
-  linked it without a reason, still has to be established from `sentinelai-evaluation.json`
-  and `GET /incidents/{id}`. No pass criterion was changed.
+  No pass criterion was changed.
+
+## Grouping failure analysis (2026-11-19 20:50Z, read-only)
+
+Raw output: `grouping-analysis.txt` (incident #2's events and links, queried from Postgres).
+
+- The 0-reason detection is `510ef464` (frontend `error_rate`). It is the incident's **opener**,
+  not a joiner: event 11 is `created` with `detection_id = 510ef464`, and its link has score 0 and
+  `[]` reasons, which is what `_open_incident` writes (`backend/app/services/correlation.py`).
+- The other 6 detections are the real joiners (events 13–18) and each has ≥ 1 reason
+  (counts 1, 3, 3, 4, 4, 4; scores 3–9).
+- Cause: `evaluate.py` treats `incident["detections"][0]` as the opener (`joined = members[1:]`),
+  but the API orders an incident's detections by `(Detection.started_at, Detection.id)`
+  (`backend/app/repositories/incidents.py:162`). All 7 detections started at 19:01:45Z, so the
+  tie broke on UUID and the opener sorted third; `01819c6b` (3 reasons) was dropped from the
+  check instead.
+- So correlation grouped structurally; the check picked the wrong detection to exempt.
+  The evaluator is **unchanged** and the recorded verdict for this run stays **FAIL** until a
+  fix to how the evaluator finds the opener is approved and the run is evaluated again.
 - `dump_incidents.py` (read-only public-API dump) failed here because it was run from the
   wrong directory; run it from `testbed/` with `PYTHONPATH=.`.
