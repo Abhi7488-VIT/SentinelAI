@@ -420,3 +420,53 @@ async def test_incident_api_list_detail_transitions_events(
     assert (await client.get(f"/api/v1/orgs/{eve.org_id}/incidents", headers=eve.headers)).json()[
         "items"
     ] == []
+
+
+async def test_foreign_ids_as_list_filters_never_reveal_data(
+    client: httpx.AsyncClient,
+    sessionmaker: SM,
+    shop: dict[str, Any],
+    partitions: None,
+    t0: datetime,
+) -> None:
+    """Org A has an incident, detections and detector states. Org B's owner passing Org A's
+    service/project ids as filters on Org B's list endpoints gets nothing (same answer as for
+    an id that does not exist), and the graph for Org A's project is 404. Positive control:
+    the same filters in Org A return the data."""
+    org, svc, owner = shop["org"], shop["svc"], shop["owner"]
+    await traffic(
+        sessionmaker,
+        org,
+        svc["order-service"],
+        t0 - 120 * S,
+        t0 + 180 * S,
+        error=lambda t, i: t >= t0,
+    )
+    await ticks(sessionmaker, t0, t0 + 90 * S, seen=[svc["order-service"]])
+    a_service, a_project = svc["order-service"], shop["project"]["id"]
+    filtered = (
+        ("incidents", {"service_id": a_service}),
+        ("incidents", {"project_id": a_project}),
+        ("detections", {"service_id": a_service}),
+        ("detector-states", {"service_id": a_service}),
+    )
+    for route, params in filtered:
+        mine = await client.get(f"/api/v1/orgs/{org}/{route}", params=params, headers=owner.headers)
+        assert mine.status_code == 200, (route, params, mine.text)
+        assert mine.json()["items"], (route, params)
+
+    eve = await register(client, "Eve", "Eve Org")
+    eve_project = await create_project(client, eve, eve.org_id, "Eve's")
+    await create_service(client, eve, eve.org_id, eve_project["id"], "order-service")
+    for route, params in filtered:
+        resp = await client.get(
+            f"/api/v1/orgs/{eve.org_id}/{route}", params=params, headers=eve.headers
+        )
+        assert resp.status_code == 200, (route, params, resp.text)
+        assert resp.json()["items"] == [], (route, params)
+    graph = await client.get(
+        f"/api/v1/orgs/{eve.org_id}/service-graph",
+        params={"project_id": a_project},
+        headers=eve.headers,
+    )
+    assert graph.status_code == 404
