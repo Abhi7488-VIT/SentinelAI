@@ -1,0 +1,239 @@
+# T9 overview / ingest-usage queries: EXPLAIN ANALYZE on the live Codespace DB (2026-11-19T23:11:19Z, before commit; tables are small: see counts)
+## default planner
+SET
+== counts
+ ingest_usage | window_stats | detections | incidents 
+--------------+--------------+------------+-----------
+         4932 |         6098 |         21 |         3
+(1 row)
+
+== ingest-usage minutes page
+                                                                                                       QUERY PLAN                                                                                                        
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit (actual time=0.058..0.107 rows=51 loops=1)
+   Buffers: shared hit=58 read=1
+   ->  Group (actual time=0.057..0.103 rows=51 loops=1)
+         Group Key: minute
+         Buffers: shared hit=58 read=1
+         ->  Index Only Scan Backward using ix_ingest_usage_service_minute on ingest_usage (actual time=0.056..0.087 rows=151 loops=1)
+               Index Cond: ((org_id = '3d932692-4301-4540-89b4-73aa25324d3d'::uuid) AND (service_id = 'e23db41e-1864-4992-8ee0-25947d02641f'::uuid) AND (minute >= (now() - '24:00:00'::interval)) AND (minute < now()))
+               Heap Fetches: 158
+               Buffers: shared hit=58 read=1
+ Planning:
+   Buffers: shared hit=34
+ Planning Time: 0.344 ms
+ Execution Time: 0.165 ms
+(13 rows)
+
+== ingest totals 15m
+                                                                                                                                                                            QUERY PLAN                                                                                                                                                                            
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ HashAggregate (actual time=0.145..0.147 rows=5 loops=1)
+   Group Key: service_id
+   Batches: 1  Memory Usage: 24kB
+   Buffers: shared hit=16
+   ->  Bitmap Heap Scan on ingest_usage (actual time=0.077..0.096 rows=171 loops=1)
+         Recheck Cond: ((org_id = '3d932692-4301-4540-89b4-73aa25324d3d'::uuid) AND (service_id = ANY ('{e23db41e-1864-4992-8ee0-25947d02641f,f4ff5bb9-442a-4b6f-8b55-4eddbc21e38e,88b7b02d-2154-49e4-a3d2-a3e32eab7bd2,753b51ac-7989-4bff-9c19-98bb5cb4cf90,010796e1-7b03-4747-a5f8-56d37367ee36}'::uuid[])) AND (minute >= (now() - '00:15:00'::interval)))
+         Heap Blocks: exact=6
+         Buffers: shared hit=16
+         ->  Bitmap Index Scan on ix_ingest_usage_service_minute (actual time=0.069..0.069 rows=177 loops=1)
+               Index Cond: ((org_id = '3d932692-4301-4540-89b4-73aa25324d3d'::uuid) AND (service_id = ANY ('{e23db41e-1864-4992-8ee0-25947d02641f,f4ff5bb9-442a-4b6f-8b55-4eddbc21e38e,88b7b02d-2154-49e4-a3d2-a3e32eab7bd2,753b51ac-7989-4bff-9c19-98bb5cb4cf90,010796e1-7b03-4747-a5f8-56d37367ee36}'::uuid[])) AND (minute >= (now() - '00:15:00'::interval)))
+               Buffers: shared hit=10
+ Planning:
+   Buffers: shared hit=20 read=1 dirtied=2
+ Planning Time: 2.187 ms
+ Execution Time: 0.210 ms
+(15 rows)
+
+== per-minute series 60m
+                                                                                                                                                  QUERY PLAN                                                                                                                                                   
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ GroupAggregate (actual time=0.487..0.532 rows=60 loops=1)
+   Group Key: service_id, (date_trunc('minute'::text, bucket_start))
+   Buffers: shared hit=248
+   ->  Sort (actual time=0.482..0.491 rows=215 loops=1)
+         Sort Key: service_id, (date_trunc('minute'::text, bucket_start))
+         Sort Method: quicksort  Memory: 35kB
+         Buffers: shared hit=248
+         ->  Index Scan using ix_service_window_stats_bucket_start on service_window_stats (actual time=0.019..0.352 rows=215 loops=1)
+               Index Cond: ((bucket_start >= (now() - '01:00:00'::interval)) AND (bucket_start < now()))
+               Filter: ((org_id = '3d932692-4301-4540-89b4-73aa25324d3d'::uuid) AND (service_id = ANY ('{e23db41e-1864-4992-8ee0-25947d02641f,f4ff5bb9-442a-4b6f-8b55-4eddbc21e38e,88b7b02d-2154-49e4-a3d2-a3e32eab7bd2,753b51ac-7989-4bff-9c19-98bb5cb4cf90,010796e1-7b03-4747-a5f8-56d37367ee36}'::uuid[])))
+               Buffers: shared hit=242
+ Planning:
+   Buffers: shared hit=16
+ Planning Time: 0.248 ms
+ Execution Time: 0.575 ms
+(15 rows)
+
+== open incidents by severity
+                                                                                     QUERY PLAN                                                                                     
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ HashAggregate (actual time=0.011..0.011 rows=1 loops=1)
+   Group Key: severity
+   Batches: 1  Memory Usage: 24kB
+   Buffers: shared hit=1
+   ->  Seq Scan on incidents (actual time=0.006..0.007 rows=3 loops=1)
+         Filter: (((status)::text <> 'resolved'::text) AND (org_id = '3d932692-4301-4540-89b4-73aa25324d3d'::uuid) AND (project_id = 'a4bffde3-4fb9-4cb2-a30f-e66191ae0888'::uuid))
+         Buffers: shared hit=1
+ Planning:
+   Buffers: shared hit=35
+ Planning Time: 0.299 ms
+ Execution Time: 0.028 ms
+(11 rows)
+
+== latest incidents
+                                                                   QUERY PLAN                                                                    
+-------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit (actual time=0.017..0.017 rows=3 loops=1)
+   Buffers: shared hit=1
+   ->  Sort (actual time=0.016..0.017 rows=3 loops=1)
+         Sort Key: created_at DESC, id DESC
+         Sort Method: quicksort  Memory: 25kB
+         Buffers: shared hit=1
+         ->  Seq Scan on incidents (actual time=0.005..0.006 rows=3 loops=1)
+               Filter: ((org_id = '3d932692-4301-4540-89b4-73aa25324d3d'::uuid) AND (project_id = 'a4bffde3-4fb9-4cb2-a30f-e66191ae0888'::uuid))
+               Buffers: shared hit=1
+ Planning:
+   Buffers: shared hit=32
+ Planning Time: 0.371 ms
+ Execution Time: 0.040 ms
+(13 rows)
+
+== detections by rule 24h
+                                                                                                                                                                         QUERY PLAN                                                                                                                                                                         
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ HashAggregate (actual time=0.027..0.028 rows=3 loops=1)
+   Group Key: rule
+   Batches: 1  Memory Usage: 24kB
+   Buffers: shared hit=19
+   ->  Seq Scan on detections (actual time=0.006..0.019 rows=21 loops=1)
+         Filter: ((org_id = '3d932692-4301-4540-89b4-73aa25324d3d'::uuid) AND (service_id = ANY ('{e23db41e-1864-4992-8ee0-25947d02641f,f4ff5bb9-442a-4b6f-8b55-4eddbc21e38e,88b7b02d-2154-49e4-a3d2-a3e32eab7bd2,753b51ac-7989-4bff-9c19-98bb5cb4cf90,010796e1-7b03-4747-a5f8-56d37367ee36}'::uuid[])) AND (started_at >= (now() - '24:00:00'::interval)))
+         Buffers: shared hit=19
+ Planning:
+   Buffers: shared hit=9
+ Planning Time: 0.181 ms
+ Execution Time: 0.049 ms
+(11 rows)
+
+
+## enable_seqscan = off (index choice at scale)
+SET
+SET
+== counts
+ ingest_usage | window_stats | detections | incidents 
+--------------+--------------+------------+-----------
+         4932 |         6098 |         21 |         3
+(1 row)
+
+== ingest-usage minutes page
+                                                                                                       QUERY PLAN                                                                                                        
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit (actual time=0.053..0.128 rows=51 loops=1)
+   Buffers: shared hit=59
+   ->  Group (actual time=0.052..0.123 rows=51 loops=1)
+         Group Key: minute
+         Buffers: shared hit=59
+         ->  Index Only Scan Backward using ix_ingest_usage_service_minute on ingest_usage (actual time=0.052..0.110 rows=151 loops=1)
+               Index Cond: ((org_id = '3d932692-4301-4540-89b4-73aa25324d3d'::uuid) AND (service_id = 'e23db41e-1864-4992-8ee0-25947d02641f'::uuid) AND (minute >= (now() - '24:00:00'::interval)) AND (minute < now()))
+               Heap Fetches: 158
+               Buffers: shared hit=59
+ Planning:
+   Buffers: shared hit=34
+ Planning Time: 0.371 ms
+ Execution Time: 0.188 ms
+(13 rows)
+
+== ingest totals 15m
+                                                                                                                                                                            QUERY PLAN                                                                                                                                                                            
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ HashAggregate (actual time=0.126..0.128 rows=5 loops=1)
+   Group Key: service_id
+   Batches: 1  Memory Usage: 24kB
+   Buffers: shared hit=16
+   ->  Bitmap Heap Scan on ingest_usage (actual time=0.050..0.075 rows=171 loops=1)
+         Recheck Cond: ((org_id = '3d932692-4301-4540-89b4-73aa25324d3d'::uuid) AND (service_id = ANY ('{e23db41e-1864-4992-8ee0-25947d02641f,f4ff5bb9-442a-4b6f-8b55-4eddbc21e38e,88b7b02d-2154-49e4-a3d2-a3e32eab7bd2,753b51ac-7989-4bff-9c19-98bb5cb4cf90,010796e1-7b03-4747-a5f8-56d37367ee36}'::uuid[])) AND (minute >= (now() - '00:15:00'::interval)))
+         Heap Blocks: exact=6
+         Buffers: shared hit=16
+         ->  Bitmap Index Scan on ix_ingest_usage_service_minute (actual time=0.042..0.042 rows=177 loops=1)
+               Index Cond: ((org_id = '3d932692-4301-4540-89b4-73aa25324d3d'::uuid) AND (service_id = ANY ('{e23db41e-1864-4992-8ee0-25947d02641f,f4ff5bb9-442a-4b6f-8b55-4eddbc21e38e,88b7b02d-2154-49e4-a3d2-a3e32eab7bd2,753b51ac-7989-4bff-9c19-98bb5cb4cf90,010796e1-7b03-4747-a5f8-56d37367ee36}'::uuid[])) AND (minute >= (now() - '00:15:00'::interval)))
+               Buffers: shared hit=10
+ Planning:
+   Buffers: shared hit=19
+ Planning Time: 0.277 ms
+ Execution Time: 0.187 ms
+(15 rows)
+
+== per-minute series 60m
+                                                                                                                                                  QUERY PLAN                                                                                                                                                   
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ GroupAggregate (actual time=0.423..0.466 rows=60 loops=1)
+   Group Key: service_id, (date_trunc('minute'::text, bucket_start))
+   Buffers: shared hit=246
+   ->  Sort (actual time=0.420..0.428 rows=215 loops=1)
+         Sort Key: service_id, (date_trunc('minute'::text, bucket_start))
+         Sort Method: quicksort  Memory: 35kB
+         Buffers: shared hit=246
+         ->  Index Scan using ix_service_window_stats_bucket_start on service_window_stats (actual time=0.019..0.279 rows=215 loops=1)
+               Index Cond: ((bucket_start >= (now() - '01:00:00'::interval)) AND (bucket_start < now()))
+               Filter: ((org_id = '3d932692-4301-4540-89b4-73aa25324d3d'::uuid) AND (service_id = ANY ('{e23db41e-1864-4992-8ee0-25947d02641f,f4ff5bb9-442a-4b6f-8b55-4eddbc21e38e,88b7b02d-2154-49e4-a3d2-a3e32eab7bd2,753b51ac-7989-4bff-9c19-98bb5cb4cf90,010796e1-7b03-4747-a5f8-56d37367ee36}'::uuid[])))
+               Buffers: shared hit=240
+ Planning:
+   Buffers: shared hit=16
+ Planning Time: 0.315 ms
+ Execution Time: 0.505 ms
+(15 rows)
+
+== open incidents by severity
+                                                                     QUERY PLAN                                                                      
+-----------------------------------------------------------------------------------------------------------------------------------------------------
+ GroupAggregate (actual time=0.753..0.753 rows=1 loops=1)
+   Group Key: severity
+   Buffers: shared hit=5 read=1 dirtied=1
+   ->  Sort (actual time=0.742..0.742 rows=3 loops=1)
+         Sort Key: severity
+         Sort Method: quicksort  Memory: 25kB
+         Buffers: shared hit=5 read=1 dirtied=1
+         ->  Index Scan using ix_incidents_active on incidents (actual time=0.697..0.702 rows=3 loops=1)
+               Index Cond: ((org_id = '3d932692-4301-4540-89b4-73aa25324d3d'::uuid) AND (project_id = 'a4bffde3-4fb9-4cb2-a30f-e66191ae0888'::uuid))
+               Buffers: shared hit=2 read=1 dirtied=1
+ Planning:
+   Buffers: shared hit=35
+ Planning Time: 0.280 ms
+ Execution Time: 0.800 ms
+(14 rows)
+
+== latest incidents
+                                                        QUERY PLAN                                                        
+--------------------------------------------------------------------------------------------------------------------------
+ Limit (actual time=0.143..0.147 rows=3 loops=1)
+   Buffers: shared hit=3 read=1 dirtied=1
+   ->  Index Scan Backward using ix_incidents_org_id_created_at_id on incidents (actual time=0.142..0.145 rows=3 loops=1)
+         Index Cond: (org_id = '3d932692-4301-4540-89b4-73aa25324d3d'::uuid)
+         Filter: (project_id = 'a4bffde3-4fb9-4cb2-a30f-e66191ae0888'::uuid)
+         Buffers: shared hit=3 read=1 dirtied=1
+ Planning:
+   Buffers: shared hit=32
+ Planning Time: 0.443 ms
+ Execution Time: 0.176 ms
+(10 rows)
+
+== detections by rule 24h
+                                                                                                                                                                              QUERY PLAN                                                                                                                                                                              
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ HashAggregate (actual time=0.089..0.090 rows=3 loops=1)
+   Group Key: rule
+   Batches: 1  Memory Usage: 24kB
+   Buffers: shared hit=19
+   ->  Bitmap Heap Scan on detections (actual time=0.052..0.075 rows=21 loops=1)
+         Recheck Cond: ((org_id = '3d932692-4301-4540-89b4-73aa25324d3d'::uuid) AND (service_id = ANY ('{e23db41e-1864-4992-8ee0-25947d02641f,f4ff5bb9-442a-4b6f-8b55-4eddbc21e38e,88b7b02d-2154-49e4-a3d2-a3e32eab7bd2,753b51ac-7989-4bff-9c19-98bb5cb4cf90,010796e1-7b03-4747-a5f8-56d37367ee36}'::uuid[])) AND (started_at >= (now() - '24:00:00'::interval)))
+         Heap Blocks: exact=18
+         Buffers: shared hit=19
+         ->  Bitmap Index Scan on ix_detections_org_id_service_id_started_at (actual time=0.039..0.039 rows=57 loops=1)
+               Index Cond: ((org_id = '3d932692-4301-4540-89b4-73aa25324d3d'::uuid) AND (service_id = ANY ('{e23db41e-1864-4992-8ee0-25947d02641f,f4ff5bb9-442a-4b6f-8b55-4eddbc21e38e,88b7b02d-2154-49e4-a3d2-a3e32eab7bd2,753b51ac-7989-4bff-9c19-98bb5cb4cf90,010796e1-7b03-4747-a5f8-56d37367ee36}'::uuid[])) AND (started_at >= (now() - '24:00:00'::interval)))
+               Buffers: shared hit=1
+ Planning:
+   Buffers: shared hit=9
+ Planning Time: 0.402 ms
+ Execution Time: 0.649 ms
+(15 rows)
+

@@ -306,6 +306,28 @@ export interface paths {
         patch: operations["change_member_role_api_v1_orgs__org_id__members__user_id__patch"];
         trace?: never;
     };
+    "/api/v1/orgs/{org_id}/overview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Overview
+         * @description Open incidents by severity, latest incidents, detections in 24 h by rule, and per active
+         *     service: health, last seen, ingest accepted/rejected (15 min), requests/errors per minute
+         *     (60 min).
+         */
+        get: operations["get_overview_api_v1_orgs__org_id__overview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/orgs/{org_id}/projects": {
         parameters: {
             query?: never;
@@ -454,6 +476,27 @@ export interface paths {
         get?: never;
         /** Set Dependencies */
         put: operations["set_dependencies_api_v1_orgs__org_id__services__service_id__dependencies_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/orgs/{org_id}/services/{service_id}/ingest-usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Ingest Usage
+         * @description Records accepted and rejected (by signal and reason) per minute, summed over the
+         *     service's keys; newest minute first. Default window: the last hour; at most 24 h.
+         */
+        get: operations["get_ingest_usage_api_v1_orgs__org_id__services__service_id__ingest_usage_get"];
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -1039,6 +1082,20 @@ export interface components {
              */
             updated_at: string;
         };
+        /** IngestUsageMinuteOut */
+        IngestUsageMinuteOut: {
+            accepted: components["schemas"]["SignalCounts"];
+            /**
+             * Minute
+             * Format: date-time
+             */
+            minute: string;
+            rejected: components["schemas"]["SignalCounts"];
+            /** Rejected By Reason */
+            rejected_by_reason: {
+                [key: string]: number;
+            };
+        };
         /** LivenessResponse */
         LivenessResponse: {
             /**
@@ -1121,6 +1178,18 @@ export interface components {
             org_slug: string;
             role: components["schemas"]["Role"];
         };
+        /** MinutePoint */
+        MinutePoint: {
+            /** Errors */
+            errors: number;
+            /**
+             * Minute
+             * Format: date-time
+             */
+            minute: string;
+            /** Requests */
+            requests: number;
+        };
         /** OrgCreate */
         OrgCreate: {
             /** Name */
@@ -1173,6 +1242,91 @@ export interface components {
             /** Slug */
             slug: string;
         };
+        /** OverviewIncident */
+        OverviewIncident: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Number */
+            number: number;
+            /**
+             * Severity
+             * @enum {string}
+             */
+            severity: "warning" | "critical";
+            /**
+             * Started At
+             * Format: date-time
+             */
+            started_at: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "open" | "investigating" | "mitigated" | "resolved";
+            /** Title */
+            title: string;
+        };
+        /** OverviewOut */
+        OverviewOut: {
+            /**
+             * Detections 24H
+             * @description Detections started in the last 24 h.
+             */
+            detections_24h: components["schemas"]["RuleCount"][];
+            /**
+             * Generated At
+             * Format: date-time
+             */
+            generated_at: string;
+            /**
+             * Latest Incidents
+             * @description Newest 5 by creation.
+             */
+            latest_incidents: components["schemas"]["OverviewIncident"][];
+            open_incidents: components["schemas"]["SeverityCounts"];
+            /**
+             * Project Id
+             * Format: uuid
+             */
+            project_id: string;
+            /** Services */
+            services: components["schemas"]["OverviewServiceOut"][];
+            /** Services Truncated */
+            services_truncated: boolean;
+        };
+        /** OverviewServiceOut */
+        OverviewServiceOut: {
+            /** Environment */
+            environment: string;
+            health_status: components["schemas"]["HealthStatus"];
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Ingest Accepted 15M
+             * @description Records accepted in the last 15 minutes.
+             */
+            ingest_accepted_15m: number;
+            /**
+             * Ingest Rejected 15M
+             * @description Records rejected in the last 15 minutes.
+             */
+            ingest_rejected_15m: number;
+            /** Last Seen At */
+            last_seen_at: string | null;
+            /** Name */
+            name: string;
+            /**
+             * Series
+             * @description Server-span requests/errors per minute, last 60 min; minutes without rollups are absent (no data), not zero.
+             */
+            series: components["schemas"]["MinutePoint"][];
+        };
         /** Page[ApiKeyOut] */
         Page_ApiKeyOut_: {
             /** Items */
@@ -1212,6 +1366,13 @@ export interface components {
         Page_IncidentOut_: {
             /** Items */
             items: components["schemas"]["IncidentOut"][];
+            /** Next Cursor */
+            next_cursor: string | null;
+        };
+        /** Page[IngestUsageMinuteOut] */
+        Page_IngestUsageMinuteOut_: {
+            /** Items */
+            items: components["schemas"]["IngestUsageMinuteOut"][];
             /** Next Cursor */
             next_cursor: string | null;
         };
@@ -1344,6 +1505,16 @@ export interface components {
          * @enum {string}
          */
         Role: "viewer" | "engineer" | "admin" | "owner";
+        /** RuleCount */
+        RuleCount: {
+            /** Count */
+            count: number;
+            /**
+             * Rule
+             * @enum {string}
+             */
+            rule: "error_rate" | "latency_shift" | "resource_saturation" | "health_check" | "deploy_change";
+        };
         /**
          * RuleOverride
          * @description Override of one detection rule's defaults (ADR 0006). Unset fields keep the default.
@@ -1487,6 +1658,31 @@ export interface components {
             /** Repo Url */
             repo_url?: string | null;
             telemetry_config?: components["schemas"]["TelemetryConfig"] | null;
+        };
+        /** SeverityCounts */
+        SeverityCounts: {
+            /** Critical */
+            critical: number;
+            /** Warning */
+            warning: number;
+        };
+        /** SignalCounts */
+        SignalCounts: {
+            /**
+             * Logs
+             * @default 0
+             */
+            logs: number;
+            /**
+             * Metrics
+             * @default 0
+             */
+            metrics: number;
+            /**
+             * Traces
+             * @default 0
+             */
+            traces: number;
         };
         /**
          * TelemetryConfig
@@ -3204,6 +3400,75 @@ export interface operations {
             };
         };
     };
+    get_overview_api_v1_orgs__org_id__overview_get: {
+        parameters: {
+            query: {
+                project_id: string;
+            };
+            header?: never;
+            path: {
+                org_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OverviewOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     list_projects_api_v1_orgs__org_id__projects_get: {
         parameters: {
             query?: {
@@ -4323,6 +4588,88 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ServiceOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_ingest_usage_api_v1_orgs__org_id__services__service_id__ingest_usage_get: {
+        parameters: {
+            query?: {
+                from?: string | null;
+                to?: string | null;
+                limit?: number;
+                cursor?: string | null;
+            };
+            header?: never;
+            path: {
+                service_id: string;
+                org_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page_IngestUsageMinuteOut_"];
                 };
             };
             /** @description Unauthorized */

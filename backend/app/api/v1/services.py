@@ -4,6 +4,7 @@ manages ingest keys. Tenant scoping comes from the *Ctx dependency + scoped repo
 from __future__ import annotations
 
 import uuid
+from datetime import datetime
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Query, Response, status
@@ -14,6 +15,7 @@ from app.api.tenancy import AdminCtx, EngineerCtx, ViewerCtx
 from app.core.security.api_keys import display_prefix
 from app.models.service import ServiceApiKey
 from app.schemas.common import ErrorResponse, Page
+from app.schemas.overview import IngestUsageMinuteOut, SignalCounts
 from app.schemas.services import (
     ApiKeyCreate,
     ApiKeyCreated,
@@ -25,6 +27,7 @@ from app.schemas.services import (
     ServiceOut,
     ServiceUpdate,
 )
+from app.services.overview import OverviewService
 from app.services.service_registry import ServiceRegistryService, ServiceView
 
 router = APIRouter(prefix="/orgs/{org_id}/services", tags=["services"])
@@ -174,3 +177,35 @@ async def revoke_api_key(
 ) -> ApiKeyOut:
     key = await ServiceRegistryService(session, ctx).revoke_key(service_id, key_id, meta=meta)
     return _key_out(key, ApiKeyOut)
+
+
+@router.get(
+    "/{service_id}/ingest-usage",
+    response_model=Page[IngestUsageMinuteOut],
+    responses=_errors,
+)
+async def get_ingest_usage(
+    service_id: uuid.UUID,
+    ctx: ViewerCtx,
+    session: SessionDep,
+    page: PageDep,
+    start: Annotated[datetime | None, Query(alias="from")] = None,
+    end: Annotated[datetime | None, Query(alias="to")] = None,
+) -> Page[IngestUsageMinuteOut]:
+    """Records accepted and rejected (by signal and reason) per minute, summed over the
+    service's keys; newest minute first. Default window: the last hour; at most 24 h."""
+    minutes, next_cursor = await OverviewService(session, ctx).ingest_usage(
+        service_id, start=start, end=end, limit=page.limit, cursor=page.cursor
+    )
+    return Page[IngestUsageMinuteOut](
+        items=[
+            IngestUsageMinuteOut(
+                minute=m.minute,
+                accepted=SignalCounts.model_validate(m.accepted),
+                rejected=SignalCounts.model_validate(m.rejected),
+                rejected_by_reason=m.rejected_by_reason,
+            )
+            for m in minutes
+        ],
+        next_cursor=next_cursor,
+    )
