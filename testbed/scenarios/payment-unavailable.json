@@ -1,0 +1,142 @@
+{
+  "schema_version": 1,
+  "kind": "definition",
+  "id": "payment-unavailable",
+  "number": 4,
+  "title": "payment-service unreachable from order-service",
+  "injected_fault": {
+    "trigger": "Toxiproxy link order-to-payment disabled",
+    "description": "The network link from order-service to payment-service (through Toxiproxy) is disabled, so connections are refused. Checkout needs a payment authorisation and fails; browsing does not touch payment-service and keeps working.",
+    "stop": "re-enable the order-to-payment link"
+  },
+  "root_cause": {
+    "category": "dependency_unavailable",
+    "service": "payment-service",
+    "component": "network path order-service -> payment-service (connection refused)",
+    "summary": "order-service cannot connect to payment-service, so payment authorisation fails and checkout returns errors through api-gateway and frontend; payment-service itself receives no traffic, and catalogue browsing is unaffected.",
+    "code_location": null
+  },
+  "expected_symptoms": [
+    {
+      "id": "order-payment-unavailable-logs",
+      "signal": "log",
+      "backend": "loki",
+      "description": "order-service error logs: payment-service is unavailable (connection failed), for 1 minute.",
+      "query": "sum(count_over_time({service_name=\"order-service\"} |= \"payment-service is unavailable\" [1m]))",
+      "condition": {
+        "op": ">",
+        "threshold": 0,
+        "min_points": 4
+      }
+    },
+    {
+      "id": "order-payment-connect-error-spans",
+      "signal": "trace",
+      "backend": "jaeger",
+      "description": "order-service client spans to payment-service fail with ConnectError (no HTTP response at all). Note: a refused connection records no http.client duration sample, so this is visible in traces and logs, not in that metric (verified live).",
+      "query": {
+        "service": "order-service",
+        "operation": "POST",
+        "tags": {
+          "error.type": "ConnectError"
+        }
+      },
+      "condition": {
+        "op": ">=",
+        "threshold": 5
+      }
+    },
+    {
+      "id": "checkout-5xx",
+      "signal": "metric",
+      "backend": "prometheus",
+      "description": "Checkout fails: api-gateway POST /api/orders 5xx share above 50% for 1 minute.",
+      "query": "(sum(rate(http_server_request_duration_seconds_count{service_name=\"api-gateway\", http_route=~\"/api/orders\", http_request_method=\"POST\", http_response_status_code=~\"5..\"}[1m])) or vector(0)) / sum(rate(http_server_request_duration_seconds_count{service_name=\"api-gateway\", http_route=~\"/api/orders\", http_request_method=\"POST\"}[1m]))",
+      "condition": {
+        "op": ">",
+        "threshold": 0.5,
+        "min_points": 4
+      }
+    },
+    {
+      "id": "payment-no-traffic",
+      "signal": "metric",
+      "backend": "prometheus",
+      "description": "payment-service receives (almost) no requests for 2 minutes.",
+      "query": "sum(rate(http_server_request_duration_seconds_count{service_name=\"payment-service\"}[1m])) or vector(0)",
+      "condition": {
+        "op": "<",
+        "threshold": 0.05,
+        "min_points": 8
+      }
+    },
+    {
+      "id": "order-checkout-error-traces",
+      "signal": "trace",
+      "backend": "jaeger",
+      "description": "order-service POST /orders traces with a 503 server span (payment authorisation failed).",
+      "query": {
+        "service": "order-service",
+        "operation": "POST /orders",
+        "tags": {
+          "http.response.status_code": "503"
+        }
+      },
+      "condition": {
+        "op": ">=",
+        "threshold": 5
+      }
+    },
+    {
+      "id": "browsing-unaffected",
+      "signal": "metric",
+      "backend": "prometheus",
+      "description": "Browsing keeps working: frontend product pages 5xx share stays below 1%.",
+      "query": "(sum(rate(http_server_request_duration_seconds_count{service_name=\"frontend\", http_route=~\"/products|/products/{sku}\", http_response_status_code=~\"5..\"}[1m])) or vector(0)) / sum(rate(http_server_request_duration_seconds_count{service_name=\"frontend\", http_route=~\"/products|/products/{sku}\"}[1m]))",
+      "condition": {
+        "op": "<",
+        "threshold": 0.01,
+        "min_fraction": 1.0
+      }
+    }
+  ],
+  "recovery_checks": [
+    {
+      "id": "checkout-5xx-low",
+      "signal": "metric",
+      "backend": "prometheus",
+      "description": "api-gateway POST /api/orders 5xx share below 1%.",
+      "query": "(sum(rate(http_server_request_duration_seconds_count{service_name=\"api-gateway\", http_route=~\"/api/orders\", http_request_method=\"POST\", http_response_status_code=~\"5..\"}[1m])) or vector(0)) / sum(rate(http_server_request_duration_seconds_count{service_name=\"api-gateway\", http_route=~\"/api/orders\", http_request_method=\"POST\"}[1m]))",
+      "condition": {
+        "op": "<",
+        "threshold": 0.01,
+        "min_fraction": 1.0
+      }
+    },
+    {
+      "id": "payment-serving",
+      "signal": "metric",
+      "backend": "prometheus",
+      "description": "payment-service receives requests again.",
+      "query": "sum(rate(http_server_request_duration_seconds_count{service_name=\"payment-service\"}[1m])) or vector(0)",
+      "condition": {
+        "op": ">",
+        "threshold": 0.2,
+        "min_fraction": 1.0
+      }
+    }
+  ],
+  "expected_affected_services": [
+    "payment-service",
+    "order-service",
+    "api-gateway",
+    "frontend"
+  ],
+  "unaffected_services": [
+    "user-service"
+  ],
+  "timeline": {
+    "started_at": null,
+    "ended_at": null
+  }
+}

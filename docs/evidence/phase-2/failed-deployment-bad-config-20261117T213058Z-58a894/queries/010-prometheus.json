@@ -1,0 +1,51 @@
+{
+  "backend": "prometheus",
+  "query": "(sum(rate(http_server_request_duration_seconds_count{service_name=\"api-gateway\", http_route=~\"/api/login|/api/account\", http_response_status_code=~\"5..\"}[1m])) or vector(0)) / sum(rate(http_server_request_duration_seconds_count{service_name=\"api-gateway\", http_route=~\"/api/login|/api/account\"}[1m]))",
+  "params": {
+    "query": "(sum(rate(http_server_request_duration_seconds_count{service_name=\"api-gateway\", http_route=~\"/api/login|/api/account\", http_response_status_code=~\"5..\"}[1m])) or vector(0)) / sum(rate(http_server_request_duration_seconds_count{service_name=\"api-gateway\", http_route=~\"/api/login|/api/account\"}[1m]))",
+    "step": "15s",
+    "start": "1794951639.928",
+    "end": "1794951729.934"
+  },
+  "response": {
+    "status": "success",
+    "data": {
+      "resultType": "matrix",
+      "result": [
+        {
+          "metric": {},
+          "values": [
+            [
+              1794951639.928,
+              "0"
+            ],
+            [
+              1794951654.928,
+              "0"
+            ],
+            [
+              1794951669.928,
+              "0"
+            ],
+            [
+              1794951684.928,
+              "0"
+            ],
+            [
+              1794951699.928,
+              "0"
+            ],
+            [
+              1794951714.928,
+              "0"
+            ],
+            [
+              1794951729.928,
+              "0"
+            ]
+          ]
+        }
+      ]
+    }
+  }
+}

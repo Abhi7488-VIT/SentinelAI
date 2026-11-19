@@ -1,0 +1,51 @@
+{
+  "backend": "prometheus",
+  "query": "(sum(rate(http_server_request_duration_seconds_count{service_name=\"frontend\", http_response_status_code=~\"5..\"}[1m])) or vector(0)) / sum(rate(http_server_request_duration_seconds_count{service_name=\"frontend\"}[1m]))",
+  "params": {
+    "query": "(sum(rate(http_server_request_duration_seconds_count{service_name=\"frontend\", http_response_status_code=~\"5..\"}[1m])) or vector(0)) / sum(rate(http_server_request_duration_seconds_count{service_name=\"frontend\"}[1m]))",
+    "step": "15s",
+    "start": "1794952904.016",
+    "end": "1794952994.022"
+  },
+  "response": {
+    "status": "success",
+    "data": {
+      "resultType": "matrix",
+      "result": [
+        {
+          "metric": {},
+          "values": [
+            [
+              1794952904.016,
+              "0"
+            ],
+            [
+              1794952919.016,
+              "0"
+            ],
+            [
+              1794952934.016,
+              "0"
+            ],
+            [
+              1794952949.016,
+              "0"
+            ],
+            [
+              1794952964.016,
+              "0"
+            ],
+            [
+              1794952979.016,
+              "0"
+            ],
+            [
+              1794952994.016,
+              "0"
+            ]
+          ]
+        }
+      ]
+    }
+  }
+}

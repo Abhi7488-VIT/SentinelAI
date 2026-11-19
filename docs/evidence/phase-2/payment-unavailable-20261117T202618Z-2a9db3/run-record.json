@@ -1,0 +1,383 @@
+{
+  "schema_version": 1,
+  "kind": "run",
+  "id": "payment-unavailable",
+  "number": 4,
+  "title": "payment-service unreachable from order-service",
+  "injected_fault": {
+    "trigger": "Toxiproxy link order-to-payment disabled",
+    "description": "The network link from order-service to payment-service (through Toxiproxy) is disabled, so connections are refused. Checkout needs a payment authorisation and fails; browsing does not touch payment-service and keeps working.",
+    "stop": "re-enable the order-to-payment link"
+  },
+  "root_cause": {
+    "category": "dependency_unavailable",
+    "service": "payment-service",
+    "component": "network path order-service -> payment-service (connection refused)",
+    "summary": "order-service cannot connect to payment-service, so payment authorisation fails and checkout returns errors through api-gateway and frontend; payment-service itself receives no traffic, and catalogue browsing is unaffected.",
+    "code_location": null
+  },
+  "expected_symptoms": [
+    {
+      "id": "order-payment-unavailable-logs",
+      "signal": "log",
+      "backend": "loki",
+      "description": "order-service error logs: payment-service is unavailable (connection failed), for 1 minute.",
+      "query": "sum(count_over_time({service_name=\"order-service\"} |= \"payment-service is unavailable\" [1m]))",
+      "condition": {
+        "op": ">",
+        "threshold": 0,
+        "min_points": 4
+      }
+    },
+    {
+      "id": "order-payment-connect-error-spans",
+      "signal": "trace",
+      "backend": "jaeger",
+      "description": "order-service client spans to payment-service fail with ConnectError (no HTTP response at all). Note: a refused connection records no http.client duration sample, so this is visible in traces and logs, not in that metric (verified live).",
+      "query": {
+        "service": "order-service",
+        "operation": "POST",
+        "tags": {
+          "error.type": "ConnectError"
+        }
+      },
+      "condition": {
+        "op": ">=",
+        "threshold": 5
+      }
+    },
+    {
+      "id": "checkout-5xx",
+      "signal": "metric",
+      "backend": "prometheus",
+      "description": "Checkout fails: api-gateway POST /api/orders 5xx share above 50% for 1 minute.",
+      "query": "(sum(rate(http_server_request_duration_seconds_count{service_name=\"api-gateway\", http_route=~\"/api/orders\", http_request_method=\"POST\", http_response_status_code=~\"5..\"}[1m])) or vector(0)) / sum(rate(http_server_request_duration_seconds_count{service_name=\"api-gateway\", http_route=~\"/api/orders\", http_request_method=\"POST\"}[1m]))",
+      "condition": {
+        "op": ">",
+        "threshold": 0.5,
+        "min_points": 4
+      }
+    },
+    {
+      "id": "payment-no-traffic",
+      "signal": "metric",
+      "backend": "prometheus",
+      "description": "payment-service receives (almost) no requests for 2 minutes.",
+      "query": "sum(rate(http_server_request_duration_seconds_count{service_name=\"payment-service\"}[1m])) or vector(0)",
+      "condition": {
+        "op": "<",
+        "threshold": 0.05,
+        "min_points": 8
+      }
+    },
+    {
+      "id": "order-checkout-error-traces",
+      "signal": "trace",
+      "backend": "jaeger",
+      "description": "order-service POST /orders traces with a 503 server span (payment authorisation failed).",
+      "query": {
+        "service": "order-service",
+        "operation": "POST /orders",
+        "tags": {
+          "http.response.status_code": "503"
+        }
+      },
+      "condition": {
+        "op": ">=",
+        "threshold": 5
+      }
+    },
+    {
+      "id": "browsing-unaffected",
+      "signal": "metric",
+      "backend": "prometheus",
+      "description": "Browsing keeps working: frontend product pages 5xx share stays below 1%.",
+      "query": "(sum(rate(http_server_request_duration_seconds_count{service_name=\"frontend\", http_route=~\"/products|/products/{sku}\", http_response_status_code=~\"5..\"}[1m])) or vector(0)) / sum(rate(http_server_request_duration_seconds_count{service_name=\"frontend\", http_route=~\"/products|/products/{sku}\"}[1m]))",
+      "condition": {
+        "op": "<",
+        "threshold": 0.01,
+        "min_fraction": 1.0
+      }
+    }
+  ],
+  "recovery_checks": [
+    {
+      "id": "checkout-5xx-low",
+      "signal": "metric",
+      "backend": "prometheus",
+      "description": "api-gateway POST /api/orders 5xx share below 1%.",
+      "query": "(sum(rate(http_server_request_duration_seconds_count{service_name=\"api-gateway\", http_route=~\"/api/orders\", http_request_method=\"POST\", http_response_status_code=~\"5..\"}[1m])) or vector(0)) / sum(rate(http_server_request_duration_seconds_count{service_name=\"api-gateway\", http_route=~\"/api/orders\", http_request_method=\"POST\"}[1m]))",
+      "condition": {
+        "op": "<",
+        "threshold": 0.01,
+        "min_fraction": 1.0
+      }
+    },
+    {
+      "id": "payment-serving",
+      "signal": "metric",
+      "backend": "prometheus",
+      "description": "payment-service receives requests again.",
+      "query": "sum(rate(http_server_request_duration_seconds_count{service_name=\"payment-service\"}[1m])) or vector(0)",
+      "condition": {
+        "op": ">",
+        "threshold": 0.2,
+        "min_fraction": 1.0
+      }
+    }
+  ],
+  "expected_affected_services": [
+    "payment-service",
+    "order-service",
+    "api-gateway",
+    "frontend"
+  ],
+  "unaffected_services": [
+    "user-service"
+  ],
+  "timeline": {
+    "started_at": "2026-11-17T20:28:18+00:00",
+    "ended_at": "2026-11-17T20:33:18+00:00"
+  },
+  "run": {
+    "run_id": "20261117T202618Z-2a9db3",
+    "seed": 42,
+    "status": "verified",
+    "mode": "full",
+    "windows": {
+      "baseline_s": 120,
+      "observe_s": 300,
+      "recovery_s": 180
+    },
+    "baseline_started_at": "2026-11-17T20:26:18+00:00",
+    "recovery_ended_at": "2026-11-17T20:36:18+00:00",
+    "baseline_healthy": true,
+    "baseline_checks": [
+      {
+        "id": "checkout-5xx-low",
+        "observed": true,
+        "baseline": null,
+        "threshold": 0.01,
+        "points": 9,
+        "points_met": 9,
+        "peak": 0.0,
+        "onset_s": 0.0,
+        "detail": "9/9 points < 0.01 (needs >= 100% of points)",
+        "evidence": [
+          "001-prometheus.json"
+        ]
+      },
+      {
+        "id": "payment-serving",
+        "observed": true,
+        "baseline": null,
+        "threshold": 0.2,
+        "points": 9,
+        "points_met": 9,
+        "peak": 0.9997000899730081,
+        "onset_s": 0.0,
+        "detail": "9/9 points > 0.2 (needs >= 100% of points)",
+        "evidence": [
+          "002-prometheus.json"
+        ]
+      }
+    ],
+    "observed": [
+      {
+        "id": "order-payment-unavailable-logs",
+        "observed": true,
+        "baseline": null,
+        "threshold": 0.0,
+        "points": 21,
+        "points_met": 21,
+        "peak": 71.0,
+        "onset_s": 11.9,
+        "detail": "21/21 points > 0 (needs >= 4 consecutive points)",
+        "evidence": [
+          "003-loki.json"
+        ]
+      },
+      {
+        "id": "order-payment-connect-error-spans",
+        "observed": true,
+        "baseline": null,
+        "threshold": 5.0,
+        "points": 50,
+        "points_met": 50,
+        "peak": 50.0,
+        "onset_s": 244.7,
+        "detail": "50 matching traces >= 5?",
+        "evidence": [
+          "004-jaeger.json"
+        ]
+      },
+      {
+        "id": "checkout-5xx",
+        "observed": true,
+        "baseline": null,
+        "threshold": 0.5,
+        "points": 21,
+        "points_met": 18,
+        "peak": 1.0,
+        "onset_s": 45.0,
+        "detail": "18/21 points > 0.5 (needs >= 4 consecutive points)",
+        "evidence": [
+          "005-prometheus.json"
+        ]
+      },
+      {
+        "id": "payment-no-traffic",
+        "observed": true,
+        "baseline": null,
+        "threshold": 0.05,
+        "points": 21,
+        "points_met": 17,
+        "peak": 0.9396617217801592,
+        "onset_s": 60.0,
+        "detail": "17/21 points < 0.05 (needs >= 8 consecutive points)",
+        "evidence": [
+          "006-prometheus.json"
+        ]
+      },
+      {
+        "id": "order-checkout-error-traces",
+        "observed": true,
+        "baseline": null,
+        "threshold": 5.0,
+        "points": 50,
+        "points_met": 50,
+        "peak": 50.0,
+        "onset_s": 244.7,
+        "detail": "50 matching traces >= 5?",
+        "evidence": [
+          "007-jaeger.json"
+        ]
+      },
+      {
+        "id": "browsing-unaffected",
+        "observed": true,
+        "baseline": null,
+        "threshold": 0.01,
+        "points": 21,
+        "points_met": 21,
+        "peak": 0.0,
+        "onset_s": 0.0,
+        "detail": "21/21 points < 0.01 (needs >= 100% of points)",
+        "evidence": [
+          "008-prometheus.json"
+        ]
+      }
+    ],
+    "recovery": [
+      {
+        "id": "checkout-5xx-low",
+        "observed": true,
+        "baseline": null,
+        "threshold": 0.01,
+        "points": 7,
+        "points_met": 7,
+        "peak": 0.0,
+        "onset_s": 0.0,
+        "detail": "7/7 points < 0.01 (needs >= 100% of points)",
+        "evidence": [
+          "009-prometheus.json"
+        ]
+      },
+      {
+        "id": "payment-serving",
+        "observed": true,
+        "baseline": null,
+        "threshold": 0.2,
+        "points": 7,
+        "points_met": 7,
+        "peak": 1.0396673064619322,
+        "onset_s": 0.0,
+        "detail": "7/7 points > 0.2 (needs >= 100% of points)",
+        "evidence": [
+          "010-prometheus.json"
+        ]
+      }
+    ],
+    "fingerprint": {
+      "symptoms": [
+        {
+          "id": "browsing-unaffected",
+          "onset_bucket": 0,
+          "magnitude_bucket": null
+        },
+        {
+          "id": "checkout-5xx",
+          "onset_bucket": 3,
+          "magnitude_bucket": 1
+        },
+        {
+          "id": "order-checkout-error-traces",
+          "onset_bucket": null,
+          "magnitude_bucket": 3
+        },
+        {
+          "id": "order-payment-connect-error-spans",
+          "onset_bucket": null,
+          "magnitude_bucket": 3
+        },
+        {
+          "id": "order-payment-unavailable-logs",
+          "onset_bucket": 0,
+          "magnitude_bucket": null
+        },
+        {
+          "id": "payment-no-traffic",
+          "onset_bucket": 4,
+          "magnitude_bucket": null
+        }
+      ]
+    },
+    "memory": {
+      "min_available_mb": 10394,
+      "abort_below_mb": 500
+    },
+    "reasons": [],
+    "steps": [
+      {
+        "at": "2026-11-17T20:26:18+00:00",
+        "step": "reset",
+        "detail": "scenario payment-unavailable (full)"
+      },
+      {
+        "at": "2026-11-17T20:26:18+00:00",
+        "step": "network",
+        "detail": "order-to-payment enabled=True"
+      },
+      {
+        "at": "2026-11-17T20:26:18+00:00",
+        "step": "traffic",
+        "detail": "mix=baseline seed=42"
+      },
+      {
+        "at": "2026-11-17T20:28:18+00:00",
+        "step": "baseline",
+        "detail": "healthy: checkout-5xx-low, payment-serving"
+      },
+      {
+        "at": "2026-11-17T20:28:18+00:00",
+        "step": "network",
+        "detail": "order-to-payment enabled=False"
+      },
+      {
+        "at": "2026-11-17T20:33:18+00:00",
+        "step": "observe",
+        "detail": "order-payment-unavailable-logs=yes, order-payment-connect-error-spans=yes, checkout-5xx=yes, payment-no-traffic=yes, order-checkout-error-traces=yes, browsing-unaffected=yes"
+      },
+      {
+        "at": "2026-11-17T20:33:18+00:00",
+        "step": "network",
+        "detail": "order-to-payment enabled=True"
+      },
+      {
+        "at": "2026-11-17T20:36:18+00:00",
+        "step": "recovery",
+        "detail": "checkout-5xx-low=ok, payment-serving=ok"
+      }
+    ]
+  }
+}

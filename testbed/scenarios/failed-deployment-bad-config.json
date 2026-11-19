@@ -1,0 +1,149 @@
+{
+  "schema_version": 1,
+  "kind": "definition",
+  "id": "failed-deployment-bad-config",
+  "number": 3,
+  "title": "Failed deployment: user-service 2.4.0 with a bad database config",
+  "injected_fault": {
+    "trigger": "deploy user-service 2.4.0 with DATABASE_NAME=users_v2",
+    "description": "The deploy pipeline releases user-service 2.4.0 whose config sets DATABASE_NAME=users_v2, a database that does not exist. Deploy events are emitted. Every new user-service process fails at startup and exits; Docker restarts it, so it crash-loops. Logins and session checks through the gateway fail.",
+    "stop": "roll back: deploy user-service 2.3.0 with its original config (a second pair of deploy events)"
+  },
+  "root_cause": {
+    "category": "bad_deployment",
+    "service": "user-service",
+    "component": "release 2.4.0 config DATABASE_NAME=users_v2 (database does not exist)",
+    "summary": "Release 2.4.0 of user-service points its database at users_v2, which does not exist, so every instance fails during startup and the container crash-loops; api-gateway's login and session calls to user-service fail, so login and account pages return errors. Rolling back to 2.3.0 fixes it.",
+    "code_location": null
+  },
+  "expected_symptoms": [
+    {
+      "id": "bad-deploy-event",
+      "signal": "event",
+      "backend": "loki",
+      "description": "Deploy events for user-service 2.4.0 in the deploy pipeline's logs.",
+      "query": "sum(count_over_time({service_name=\"deploy-pipeline\"} | deployment_service_name=\"user-service\" | deployment_version=\"2.4.0\" [1m]))",
+      "condition": {
+        "op": ">",
+        "threshold": 0,
+        "min_points": 1
+      }
+    },
+    {
+      "id": "user-startup-failure-logs",
+      "signal": "log",
+      "backend": "loki",
+      "description": "user-service startup failures naming the missing database users_v2.",
+      "query": "sum(count_over_time({service_name=\"user-service\"} |= \"users_v2\" [1m]))",
+      "condition": {
+        "op": ">",
+        "threshold": 0,
+        "min_points": 2
+      }
+    },
+    {
+      "id": "user-instance-churn",
+      "signal": "log",
+      "backend": "loki",
+      "description": "Crash-looping: at least 3 distinct user-service instances logged a start within 5 minutes.",
+      "query": "count(count by (service_instance_id) (count_over_time({service_name=\"user-service\"} |= \"service starting\" [5m])))",
+      "condition": {
+        "op": ">=",
+        "threshold": 3,
+        "min_points": 1
+      }
+    },
+    {
+      "id": "gateway-auth-5xx",
+      "signal": "metric",
+      "backend": "prometheus",
+      "description": "api-gateway login and account calls fail: 5xx share above 50% for 1 minute.",
+      "query": "(sum(rate(http_server_request_duration_seconds_count{service_name=\"api-gateway\", http_route=~\"/api/login|/api/account\", http_response_status_code=~\"5..\"}[1m])) or vector(0)) / sum(rate(http_server_request_duration_seconds_count{service_name=\"api-gateway\", http_route=~\"/api/login|/api/account\"}[1m]))",
+      "condition": {
+        "op": ">",
+        "threshold": 0.5,
+        "min_points": 4
+      }
+    },
+    {
+      "id": "frontend-account-5xx",
+      "signal": "metric",
+      "backend": "prometheus",
+      "description": "Users see it: frontend login/account 5xx share above 20% for 1 minute.",
+      "query": "(sum(rate(http_server_request_duration_seconds_count{service_name=\"frontend\", http_route=~\"/login|/account\", http_response_status_code=~\"5..\"}[1m])) or vector(0)) / sum(rate(http_server_request_duration_seconds_count{service_name=\"frontend\", http_route=~\"/login|/account\"}[1m]))",
+      "condition": {
+        "op": ">",
+        "threshold": 0.2,
+        "min_points": 4
+      }
+    },
+    {
+      "id": "gateway-auth-error-traces",
+      "signal": "trace",
+      "backend": "jaeger",
+      "description": "api-gateway POST /api/login traces with a 503 server span (user-service unreachable).",
+      "query": {
+        "service": "api-gateway",
+        "operation": "POST /api/login",
+        "tags": {
+          "http.response.status_code": "503"
+        }
+      },
+      "condition": {
+        "op": ">=",
+        "threshold": 5
+      }
+    },
+    {
+      "id": "catalogue-unaffected",
+      "signal": "metric",
+      "backend": "prometheus",
+      "description": "Browsing does not need user-service: frontend product pages 5xx share stays below 1%.",
+      "query": "(sum(rate(http_server_request_duration_seconds_count{service_name=\"frontend\", http_route=~\"/products|/products/{sku}\", http_response_status_code=~\"5..\"}[1m])) or vector(0)) / sum(rate(http_server_request_duration_seconds_count{service_name=\"frontend\", http_route=~\"/products|/products/{sku}\"}[1m]))",
+      "condition": {
+        "op": "<",
+        "threshold": 0.01,
+        "min_fraction": 1.0
+      }
+    }
+  ],
+  "recovery_checks": [
+    {
+      "id": "gateway-auth-5xx-low",
+      "signal": "metric",
+      "backend": "prometheus",
+      "description": "api-gateway login/account 5xx share below 1%.",
+      "query": "(sum(rate(http_server_request_duration_seconds_count{service_name=\"api-gateway\", http_route=~\"/api/login|/api/account\", http_response_status_code=~\"5..\"}[1m])) or vector(0)) / sum(rate(http_server_request_duration_seconds_count{service_name=\"api-gateway\", http_route=~\"/api/login|/api/account\"}[1m]))",
+      "condition": {
+        "op": "<",
+        "threshold": 0.01,
+        "min_fraction": 1.0
+      }
+    },
+    {
+      "id": "user-service-serving",
+      "signal": "metric",
+      "backend": "prometheus",
+      "description": "user-service is serving requests again.",
+      "query": "sum(rate(http_server_request_duration_seconds_count{service_name=\"user-service\"}[1m])) or vector(0)",
+      "condition": {
+        "op": ">",
+        "threshold": 0.5,
+        "min_fraction": 1.0
+      }
+    }
+  ],
+  "expected_affected_services": [
+    "user-service",
+    "api-gateway",
+    "frontend"
+  ],
+  "unaffected_services": [
+    "order-service",
+    "payment-service"
+  ],
+  "timeline": {
+    "started_at": null,
+    "ended_at": null
+  }
+}

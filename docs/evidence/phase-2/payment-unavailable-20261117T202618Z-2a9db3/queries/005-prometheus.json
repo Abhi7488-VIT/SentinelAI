@@ -1,0 +1,107 @@
+{
+  "backend": "prometheus",
+  "query": "(sum(rate(http_server_request_duration_seconds_count{service_name=\"api-gateway\", http_route=~\"/api/orders\", http_request_method=\"POST\", http_response_status_code=~\"5..\"}[1m])) or vector(0)) / sum(rate(http_server_request_duration_seconds_count{service_name=\"api-gateway\", http_route=~\"/api/orders\", http_request_method=\"POST\"}[1m]))",
+  "params": {
+    "query": "(sum(rate(http_server_request_duration_seconds_count{service_name=\"api-gateway\", http_route=~\"/api/orders\", http_request_method=\"POST\", http_response_status_code=~\"5..\"}[1m])) or vector(0)) / sum(rate(http_server_request_duration_seconds_count{service_name=\"api-gateway\", http_route=~\"/api/orders\", http_request_method=\"POST\"}[1m]))",
+    "step": "15s",
+    "start": "1794947298.113",
+    "end": "1794947598.128"
+  },
+  "response": {
+    "status": "success",
+    "data": {
+      "resultType": "matrix",
+      "result": [
+        {
+          "metric": {},
+          "values": [
+            [
+              1794947298.113,
+              "0"
+            ],
+            [
+              1794947313.113,
+              "0.26706748090941773"
+            ],
+            [
+              1794947328.113,
+              "0.485404566692573"
+            ],
+            [
+              1794947343.113,
+              "0.8633496231058084"
+            ],
+            [
+              1794947358.113,
+              "1"
+            ],
+            [
+              1794947373.113,
+              "1"
+            ],
+            [
+              1794947388.113,
+              "1"
+            ],
+            [
+              1794947403.113,
+              "1"
+            ],
+            [
+              1794947418.113,
+              "1"
+            ],
+            [
+              1794947433.113,
+              "1"
+            ],
+            [
+              1794947448.113,
+              "1"
+            ],
+            [
+              1794947463.113,
+              "1"
+            ],
+            [
+              1794947478.113,
+              "1"
+            ],
+            [
+              1794947493.113,
+              "1"
+            ],
+            [
+              1794947508.113,
+              "1"
+            ],
+            [
+              1794947523.113,
+              "1"
+            ],
+            [
+              1794947538.113,
+              "1"
+            ],
+            [
+              1794947553.113,
+              "1"
+            ],
+            [
+              1794947568.113,
+              "1"
+            ],
+            [
+              1794947583.113,
+              "1"
+            ],
+            [
+              1794947598.113,
+              "1"
+            ]
+          ]
+        }
+      ]
+    }
+  }
+}

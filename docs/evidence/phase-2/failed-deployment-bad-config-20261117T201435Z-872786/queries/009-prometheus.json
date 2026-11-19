@@ -1,0 +1,119 @@
+{
+  "backend": "prometheus",
+  "query": "(sum(rate(http_server_request_duration_seconds_count{service_name=\"frontend\", http_route=~\"/products|/products/{sku}\", http_response_status_code=~\"5..\"}[1m])) or vector(0)) / sum(rate(http_server_request_duration_seconds_count{service_name=\"frontend\", http_route=~\"/products|/products/{sku}\"}[1m]))",
+  "params": {
+    "query": "(sum(rate(http_server_request_duration_seconds_count{service_name=\"frontend\", http_route=~\"/products|/products/{sku}\", http_response_status_code=~\"5..\"}[1m])) or vector(0)) / sum(rate(http_server_request_duration_seconds_count{service_name=\"frontend\", http_route=~\"/products|/products/{sku}\"}[1m]))",
+    "step": "15s",
+    "start": "1794946596.032",
+    "end": "1794946941.697"
+  },
+  "response": {
+    "status": "success",
+    "data": {
+      "resultType": "matrix",
+      "result": [
+        {
+          "metric": {},
+          "values": [
+            [
+              1794946596.032,
+              "0"
+            ],
+            [
+              1794946611.032,
+              "0"
+            ],
+            [
+              1794946626.032,
+              "0"
+            ],
+            [
+              1794946641.032,
+              "0"
+            ],
+            [
+              1794946656.032,
+              "0"
+            ],
+            [
+              1794946671.032,
+              "0"
+            ],
+            [
+              1794946686.032,
+              "0"
+            ],
+            [
+              1794946701.032,
+              "0"
+            ],
+            [
+              1794946716.032,
+              "0"
+            ],
+            [
+              1794946731.032,
+              "0"
+            ],
+            [
+              1794946746.032,
+              "0"
+            ],
+            [
+              1794946761.032,
+              "0"
+            ],
+            [
+              1794946776.032,
+              "0"
+            ],
+            [
+              1794946791.032,
+              "0"
+            ],
+            [
+              1794946806.032,
+              "0"
+            ],
+            [
+              1794946821.032,
+              "0"
+            ],
+            [
+              1794946836.032,
+              "0"
+            ],
+            [
+              1794946851.032,
+              "0"
+            ],
+            [
+              1794946866.032,
+              "0"
+            ],
+            [
+              1794946881.032,
+              "0"
+            ],
+            [
+              1794946896.032,
+              "0"
+            ],
+            [
+              1794946911.032,
+              "0"
+            ],
+            [
+              1794946926.032,
+              "0"
+            ],
+            [
+              1794946941.032,
+              "0"
+            ]
+          ]
+        }
+      ]
+    }
+  }
+}

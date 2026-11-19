@@ -37,3 +37,6 @@ Thumbs.db
 
 # Design-review artifacts (screenshots, inspector reports)
 .taste-skill/
+
+# Testbed runtime output (run records, deploy events)
+testbed/runs/

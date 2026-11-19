@@ -1,0 +1,107 @@
+{
+  "backend": "prometheus",
+  "query": "(sum(rate(http_server_request_duration_seconds_count{service_name=\"api-gateway\", http_route=~\"/api/orders\", http_request_method=\"POST\", http_response_status_code=~\"5..\"}[1m])) or vector(0)) / sum(rate(http_server_request_duration_seconds_count{service_name=\"api-gateway\", http_route=~\"/api/orders\", http_request_method=\"POST\"}[1m]))",
+  "params": {
+    "query": "(sum(rate(http_server_request_duration_seconds_count{service_name=\"api-gateway\", http_route=~\"/api/orders\", http_request_method=\"POST\", http_response_status_code=~\"5..\"}[1m])) or vector(0)) / sum(rate(http_server_request_duration_seconds_count{service_name=\"api-gateway\", http_route=~\"/api/orders\", http_request_method=\"POST\"}[1m]))",
+    "step": "15s",
+    "start": "1794951881.751",
+    "end": "1794952181.770"
+  },
+  "response": {
+    "status": "success",
+    "data": {
+      "resultType": "matrix",
+      "result": [
+        {
+          "metric": {},
+          "values": [
+            [
+              1794951881.751,
+              "0"
+            ],
+            [
+              1794951896.751,
+              "0.0851063829787234"
+            ],
+            [
+              1794951911.751,
+              "0.5490196078431373"
+            ],
+            [
+              1794951926.751,
+              "0.7916666666666667"
+            ],
+            [
+              1794951941.751,
+              "1"
+            ],
+            [
+              1794951956.751,
+              "1"
+            ],
+            [
+              1794951971.751,
+              "1"
+            ],
+            [
+              1794951986.751,
+              "1"
+            ],
+            [
+              1794952001.751,
+              "1"
+            ],
+            [
+              1794952016.751,
+              "1"
+            ],
+            [
+              1794952031.751,
+              "1"
+            ],
+            [
+              1794952046.751,
+              "1"
+            ],
+            [
+              1794952061.751,
+              "1"
+            ],
+            [
+              1794952076.751,
+              "1"
+            ],
+            [
+              1794952091.751,
+              "1"
+            ],
+            [
+              1794952106.751,
+              "1"
+            ],
+            [
+              1794952121.751,
+              "1"
+            ],
+            [
+              1794952136.751,
+              "1"
+            ],
+            [
+              1794952151.751,
+              "1"
+            ],
+            [
+              1794952166.751,
+              "1"
+            ],
+            [
+              1794952181.751,
+              "1"
+            ]
+          ]
+        }
+      ]
+    }
+  }
+}

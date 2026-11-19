@@ -1,0 +1,291 @@
+{
+  "backend": "loki",
+  "query": "sum(count_over_time({service_name=\"order-service\"} |= \"Timed out waiting for a database connection\" [1m]))",
+  "params": {
+    "query": "sum(count_over_time({service_name=\"order-service\"} |= \"Timed out waiting for a database connection\" [1m]))",
+    "step": "15s",
+    "start": "1794943849125508352",
+    "end": "1794944149144726016"
+  },
+  "response": {
+    "status": "success",
+    "data": {
+      "resultType": "matrix",
+      "result": [
+        {
+          "metric": {},
+          "values": [
+            [
+              1794943860,
+              "10"
+            ],
+            [
+              1794943875,
+              "83"
+            ],
+            [
+              1794943890,
+              "138"
+            ],
+            [
+              1794943905,
+              "200"
+            ],
+            [
+              1794943920,
+              "273"
+            ],
+            [
+              1794943935,
+              "268"
+            ],
+            [
+              1794943950,
+              "284"
+            ],
+            [
+              1794943965,
+              "287"
+            ],
+            [
+              1794943980,
+              "270"
+            ],
+            [
+              1794943995,
+              "274"
+            ],
+            [
+              1794944010,
+              "278"
+            ],
+            [
+              1794944025,
+              "286"
+            ],
+            [
+              1794944040,
+              "281"
+            ],
+            [
+              1794944055,
+              "284"
+            ],
+            [
+              1794944070,
+              "276"
+            ],
+            [
+              1794944085,
+              "284"
+            ],
+            [
+              1794944100,
+              "287"
+            ],
+            [
+              1794944115,
+              "276"
+            ],
+            [
+              1794944130,
+              "294"
+            ],
+            [
+              1794944145,
+              "280"
+            ],
+            [
+              1794944160,
+              "232"
+            ]
+          ]
+        }
+      ],
+      "stats": {
+        "summary": {
+          "bytesProcessedPerSecond": 21271658,
+          "linesProcessedPerSecond": 59384,
+          "totalBytesProcessed": 554140,
+          "totalLinesProcessed": 1547,
+          "execTime": 0.026050625,
+          "queueTime": 0.000462243,
+          "subqueries": 0,
+          "totalEntriesReturned": 1,
+          "splits": 0,
+          "shards": 1,
+          "totalPostFilterLines": 1547,
+          "totalStructuredMetadataBytesProcessed": 421092
+        },
+        "querier": {
+          "store": {
+            "totalChunksRef": 0,
+            "totalChunksDownloaded": 0,
+            "chunksDownloadTime": 0,
+            "queryReferencedStructuredMetadata": false,
+            "queryUsedV2Engine": false,
+            "chunk": {
+              "headChunkBytes": 0,
+              "headChunkLines": 0,
+              "decompressedBytes": 0,
+              "decompressedLines": 0,
+              "compressedBytes": 0,
+              "totalDuplicates": 0,
+              "postFilterLines": 0,
+              "headChunkStructuredMetadataBytes": 0,
+              "decompressedStructuredMetadataBytes": 0
+            },
+            "chunkRefsFetchTime": 0,
+            "congestionControlLatency": 0,
+            "pipelineWrapperFilteredLines": 0,
+            "dataobj": {
+              "prePredicateDecompressedRows": 0,
+              "prePredicateDecompressedBytes": 0,
+              "prePredicateDecompressedStructuredMetadataBytes": 0,
+              "postPredicateRows": 0,
+              "postPredicateDecompressedBytes": 0,
+              "postPredicateStructuredMetadataBytes": 0,
+              "postFilterRows": 0,
+              "pagesScanned": 0,
+              "pagesDownloaded": 0,
+              "pagesDownloadedBytes": 0,
+              "pageBatches": 0,
+              "totalRowsAvailable": 0,
+              "totalPageDownloadTime": 0
+            }
+          }
+        },
+        "ingester": {
+          "totalReached": 1,
+          "totalChunksMatched": 1,
+          "totalBatches": 4,
+          "totalLinesSent": 1353,
+          "store": {
+            "totalChunksRef": 0,
+            "totalChunksDownloaded": 0,
+            "chunksDownloadTime": 0,
+            "queryReferencedStructuredMetadata": false,
+            "queryUsedV2Engine": false,
+            "chunk": {
+              "headChunkBytes": 4094,
+              "headChunkLines": 23,
+              "decompressedBytes": 550046,
+              "decompressedLines": 1524,
+              "compressedBytes": 20392,
+              "totalDuplicates": 0,
+              "postFilterLines": 1547,
+              "headChunkStructuredMetadataBytes": 2392,
+              "decompressedStructuredMetadataBytes": 418700
+            },
+            "chunkRefsFetchTime": 121928,
+            "congestionControlLatency": 0,
+            "pipelineWrapperFilteredLines": 0,
+            "dataobj": {
+              "prePredicateDecompressedRows": 0,
+              "prePredicateDecompressedBytes": 0,
+              "prePredicateDecompressedStructuredMetadataBytes": 0,
+              "postPredicateRows": 0,
+              "postPredicateDecompressedBytes": 0,
+              "postPredicateStructuredMetadataBytes": 0,
+              "postFilterRows": 0,
+              "pagesScanned": 0,
+              "pagesDownloaded": 0,
+              "pagesDownloadedBytes": 0,
+              "pageBatches": 0,
+              "totalRowsAvailable": 0,
+              "totalPageDownloadTime": 0
+            }
+          }
+        },
+        "cache": {
+          "chunk": {
+            "entriesFound": 0,
+            "entriesRequested": 0,
+            "entriesStored": 0,
+            "bytesReceived": 0,
+            "bytesSent": 0,
+            "requests": 0,
+            "downloadTime": 0,
+            "queryLengthServed": 0
+          },
+          "index": {
+            "entriesFound": 0,
+            "entriesRequested": 0,
+            "entriesStored": 0,
+            "bytesReceived": 0,
+            "bytesSent": 0,
+            "requests": 0,
+            "downloadTime": 0,
+            "queryLengthServed": 0
+          },
+          "result": {
+            "entriesFound": 0,
+            "entriesRequested": 0,
+            "entriesStored": 0,
+            "bytesReceived": 0,
+            "bytesSent": 0,
+            "requests": 0,
+            "downloadTime": 0,
+            "queryLengthServed": 0
+          },
+          "statsResult": {
+            "entriesFound": 0,
+            "entriesRequested": 0,
+            "entriesStored": 0,
+            "bytesReceived": 0,
+            "bytesSent": 0,
+            "requests": 0,
+            "downloadTime": 0,
+            "queryLengthServed": 0
+          },
+          "volumeResult": {
+            "entriesFound": 0,
+            "entriesRequested": 0,
+            "entriesStored": 0,
+            "bytesReceived": 0,
+            "bytesSent": 0,
+            "requests": 0,
+            "downloadTime": 0,
+            "queryLengthServed": 0
+          },
+          "seriesResult": {
+            "entriesFound": 0,
+            "entriesRequested": 0,
+            "entriesStored": 0,
+            "bytesReceived": 0,
+            "bytesSent": 0,
+            "requests": 0,
+            "downloadTime": 0,
+            "queryLengthServed": 0
+          },
+          "labelResult": {
+            "entriesFound": 0,
+            "entriesRequested": 0,
+            "entriesStored": 0,
+            "bytesReceived": 0,
+            "bytesSent": 0,
+            "requests": 0,
+            "downloadTime": 0,
+            "queryLengthServed": 0
+          },
+          "instantMetricResult": {
+            "entriesFound": 0,
+            "entriesRequested": 0,
+            "entriesStored": 0,
+            "bytesReceived": 0,
+            "bytesSent": 0,
+            "requests": 0,
+            "downloadTime": 0,
+            "queryLengthServed": 0
+          }
+        },
+        "index": {
+          "totalChunks": 0,
+          "postFilterChunks": 0,
+          "shardsDuration": 0,
+          "usedBloomFilters": false
+        }
+      }
+    }
+  }
+}

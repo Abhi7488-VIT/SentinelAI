@@ -1,0 +1,119 @@
+{
+  "backend": "prometheus",
+  "query": "(sum(rate(http_server_request_duration_seconds_count{service_name=\"frontend\", http_route=~\"/login|/account\", http_response_status_code=~\"5..\"}[1m])) or vector(0)) / sum(rate(http_server_request_duration_seconds_count{service_name=\"frontend\", http_route=~\"/login|/account\"}[1m]))",
+  "params": {
+    "query": "(sum(rate(http_server_request_duration_seconds_count{service_name=\"frontend\", http_route=~\"/login|/account\", http_response_status_code=~\"5..\"}[1m])) or vector(0)) / sum(rate(http_server_request_duration_seconds_count{service_name=\"frontend\", http_route=~\"/login|/account\"}[1m]))",
+    "step": "15s",
+    "start": "1794951179.036",
+    "end": "1794951524.628"
+  },
+  "response": {
+    "status": "success",
+    "data": {
+      "resultType": "matrix",
+      "result": [
+        {
+          "metric": {},
+          "values": [
+            [
+              1794951179.036,
+              "0"
+            ],
+            [
+              1794951194.036,
+              "0.23404255319148937"
+            ],
+            [
+              1794951209.036,
+              "0.3863636363636364"
+            ],
+            [
+              1794951224.036,
+              "0.8"
+            ],
+            [
+              1794951239.036,
+              "1"
+            ],
+            [
+              1794951254.036,
+              "1"
+            ],
+            [
+              1794951269.036,
+              "1"
+            ],
+            [
+              1794951284.036,
+              "1"
+            ],
+            [
+              1794951299.036,
+              "1"
+            ],
+            [
+              1794951314.036,
+              "1"
+            ],
+            [
+              1794951329.036,
+              "1"
+            ],
+            [
+              1794951344.036,
+              "1"
+            ],
+            [
+              1794951359.036,
+              "1"
+            ],
+            [
+              1794951374.036,
+              "1"
+            ],
+            [
+              1794951389.036,
+              "1"
+            ],
+            [
+              1794951404.036,
+              "1"
+            ],
+            [
+              1794951419.036,
+              "1"
+            ],
+            [
+              1794951434.036,
+              "1"
+            ],
+            [
+              1794951449.036,
+              "1"
+            ],
+            [
+              1794951464.036,
+              "1"
+            ],
+            [
+              1794951479.036,
+              "1"
+            ],
+            [
+              1794951494.036,
+              "1"
+            ],
+            [
+              1794951509.036,
+              "1"
+            ],
+            [
+              1794951524.036,
+              "1"
+            ]
+          ]
+        }
+      ]
+    }
+  }
+}

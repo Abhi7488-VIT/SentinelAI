@@ -1,0 +1,51 @@
+{
+  "backend": "prometheus",
+  "query": "max(max_over_time(process_memory_usage_bytes{service_name=\"api-gateway\"}[30s]))",
+  "params": {
+    "query": "max(max_over_time(process_memory_usage_bytes{service_name=\"api-gateway\"}[30s]))",
+    "step": "15s",
+    "start": "1794949646.086",
+    "end": "1794949736.091"
+  },
+  "response": {
+    "status": "success",
+    "data": {
+      "resultType": "matrix",
+      "result": [
+        {
+          "metric": {},
+          "values": [
+            [
+              1794949646.086,
+              "83378176"
+            ],
+            [
+              1794949661.086,
+              "83382272"
+            ],
+            [
+              1794949676.086,
+              "83382272"
+            ],
+            [
+              1794949691.086,
+              "83386368"
+            ],
+            [
+              1794949706.086,
+              "83435520"
+            ],
+            [
+              1794949721.086,
+              "83456000"
+            ],
+            [
+              1794949736.086,
+              "83460096"
+            ]
+          ]
+        }
+      ]
+    }
+  }
+}

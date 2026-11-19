@@ -1,0 +1,447 @@
+# SentinelAI testbed — the "shop" system under test plus its infrastructure.
+# Use the workflow at the repo root: `make testbed-up` / `make testbed-down` (or testbed/tb.sh).
+#
+# Rules (docs/plans/phase-2.md §2.4, enforced by tests/unit/test_compose.py):
+#   - every container has mem_limit == memswap_limit (no swap: a container at its limit is
+#     OOM-killed inside its own cgroup; the host is never at risk)
+#   - published ports bind to 127.0.0.1 only; only the frontend is published in T1
+
+name: sentinelai-testbed
+
+x-shop-service: &shop-service
+  build:
+    context: .
+    target: services
+  image: sentinelai-testbed-shop:dev
+  restart: unless-stopped
+  networks: [shop]
+  volumes:
+    - releases:/releases:ro
+  healthcheck:
+    test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=3)"]
+    interval: 10s
+    timeout: 5s
+    retries: 6
+    start_period: 15s
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    command: ["postgres", "-c", "shared_buffers=64MB", "-c", "max_connections=60"]
+    environment:
+      POSTGRES_USER: testbed
+      POSTGRES_DB: testbed
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in testbed/.env}
+      USERS_DB_PASSWORD: ${USERS_DB_PASSWORD:?set USERS_DB_PASSWORD}
+      ORDERS_DB_PASSWORD: ${ORDERS_DB_PASSWORD:?set ORDERS_DB_PASSWORD}
+      PAYMENTS_DB_PASSWORD: ${PAYMENTS_DB_PASSWORD:?set PAYMENTS_DB_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./infra/postgres/init:/docker-entrypoint-initdb.d:ro
+    networks: [shop]
+    mem_limit: 384m
+    memswap_limit: 384m
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U testbed -d testbed"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?set REDIS_PASSWORD}
+    command: ["sh", "-c", "exec redis-server --requirepass \"$$REDIS_PASSWORD\" --maxmemory 48mb --maxmemory-policy allkeys-lru --save ''"]
+    networks: [shop]
+    mem_limit: 64m
+    memswap_limit: 64m
+    healthcheck:
+      test: ["CMD-SHELL", "REDISCLI_AUTH=\"$$REDIS_PASSWORD\" redis-cli ping | grep -q PONG"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  toxiproxy:
+    image: ghcr.io/shopify/toxiproxy:2.12.0
+    restart: unless-stopped
+    command: ["-host=0.0.0.0", "-config=/config/toxiproxy.json"]
+    volumes:
+      - ./infra/toxiproxy/toxiproxy.json:/config/toxiproxy.json:ro
+    networks:
+      shop:
+        aliases: [payments-lb]
+    mem_limit: 48m
+    memswap_limit: 48m
+    healthcheck:
+      test: ["CMD", "/toxiproxy-cli", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
+  prometheus:
+    image: prom/prometheus:v3.7.3
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=6h
+      - --storage.tsdb.retention.size=300MB
+      - --web.enable-otlp-receiver
+      - --web.enable-lifecycle
+    environment:
+      GOMEMLIMIT: 210MiB
+    volumes:
+      - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - promdata:/prometheus
+    ports:
+      - "127.0.0.1:9090:9090"
+    networks: [shop]
+    mem_limit: 256m
+    memswap_limit: 256m
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:9090/-/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
+
+  loki:
+    build:
+      context: ./infra/loki
+    image: sentinelai-testbed-loki:dev
+    restart: unless-stopped
+    command: ["-config.file=/etc/loki/loki.yaml"]
+    environment:
+      GOMEMLIMIT: 210MiB
+    volumes:
+      - ./infra/loki/loki.yaml:/etc/loki/loki.yaml:ro
+      - lokidata:/loki
+    ports:
+      - "127.0.0.1:3100:3100"
+    networks: [shop]
+    mem_limit: 256m
+    memswap_limit: 256m
+    healthcheck:
+      test: ["CMD", "/bin/busybox", "wget", "-qO-", "http://127.0.0.1:3100/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  jaeger:
+    image: jaegertracing/jaeger:2.12.0
+    restart: unless-stopped
+    command: ["--config=/etc/jaeger/jaeger.yaml"]
+    environment:
+      GOMEMLIMIT: 320MiB
+    volumes:
+      - ./infra/jaeger/jaeger.yaml:/etc/jaeger/jaeger.yaml:ro
+    ports:
+      - "127.0.0.1:16686:16686"
+    networks: [shop]
+    # 384 MiB (plan §2.4 said 256): measured live in T7, 256 MiB restarted under S1.
+    mem_limit: 384m
+    memswap_limit: 384m
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:13133/status"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
+
+  grafana:
+    # Off by default: `docker compose --profile ui up -d grafana` (or `make testbed-ui`).
+    profiles: [ui]
+    image: grafana/grafana:12.3.0
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?set GRAFANA_ADMIN_PASSWORD}
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_NEWS_NEWS_FEED_ENABLED: "false"
+    volumes:
+      - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./infra/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "127.0.0.1:3001:3000"
+    networks: [shop]
+    # Measured ~126 MiB idle; 192 leaves headroom for dashboard queries.
+    mem_limit: 192m
+    memswap_limit: 192m
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    depends_on:
+      prometheus:
+        condition: service_healthy
+      loki:
+        condition: service_healthy
+      jaeger:
+        condition: service_healthy
+
+  otel-collector:
+    build:
+      context: ./infra/otel
+    image: sentinelai-testbed-otelcol:dev
+    restart: unless-stopped
+    entrypoint: ["/bin/busybox", "sh", "-c"]
+    # The SentinelAI overlay is added only when SENTINELAI_OTLP_ENDPOINT is set (Phase 3).
+    command: ["exec /otelcol-contrib --config=/etc/otelcol/collector.yaml $${SENTINELAI_OTLP_ENDPOINT:+--config=/etc/otelcol/collector.sentinelai.yaml}"]
+    environment:
+      GOMEMLIMIT: 160MiB
+      COLLECTOR_DEBUG_VERBOSITY: ${COLLECTOR_DEBUG_VERBOSITY:-basic}
+      SENTINELAI_OTLP_ENDPOINT: ${SENTINELAI_OTLP_ENDPOINT:-}
+    volumes:
+      - ./infra/otel/collector.yaml:/etc/otelcol/collector.yaml:ro
+      - ./infra/otel/collector.sentinelai.yaml:/etc/otelcol/collector.sentinelai.yaml:ro
+    ports:
+      - "127.0.0.1:4318:4318"
+    networks: [shop]
+    mem_limit: 192m
+    memswap_limit: 192m
+    healthcheck:
+      test: ["CMD", "/bin/busybox", "wget", "-qO-", "http://127.0.0.1:13133/"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
+    depends_on:
+      prometheus:
+        condition: service_healthy
+      loki:
+        condition: service_healthy
+      jaeger:
+        condition: service_healthy
+
+  seed:
+    # One-shot: creates schemas and loads deterministic seed data; no-op if already seeded.
+    build:
+      context: .
+      target: services
+    image: sentinelai-testbed-shop:dev
+    command: ["python", "-m", "shop.seed"]
+    restart: "no"
+    environment:
+      SEED: ${SEED:-42}
+      ORDERS: ${SEED_ORDERS:-500000}
+      USERS_DATABASE_URL: postgresql+asyncpg://users_svc:${USERS_DB_PASSWORD}@postgres:5432/users
+      ORDERS_DATABASE_URL: postgresql+asyncpg://orders_svc:${ORDERS_DB_PASSWORD}@postgres:5432/orders
+      PAYMENTS_DATABASE_URL: postgresql+asyncpg://payments_svc:${PAYMENTS_DB_PASSWORD}@postgres:5432/payments
+    networks: [shop]
+    mem_limit: 192m
+    memswap_limit: 192m
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  payment-service:
+    <<: *shop-service
+    command: ["uvicorn", "shop.payment_service.main:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000", "--no-server-header", "--no-access-log"]
+    environment:
+      SERVICE_VERSION: "1.2.0"
+      SEED: ${SEED:-42}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OPS_TOKEN: ${OPS_TOKEN:?set OPS_TOKEN}
+      DATABASE_URL: postgresql+asyncpg://payments_svc:${PAYMENTS_DB_PASSWORD}@postgres:5432/payments
+    mem_limit: 160m
+    memswap_limit: 160m
+    depends_on:
+      otel-collector:
+        condition: service_healthy
+      seed:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+
+  order-service:
+    <<: *shop-service
+    command: ["uvicorn", "shop.order_service.main:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000", "--no-server-header", "--no-access-log"]
+    environment:
+      SERVICE_VERSION: "1.7.2"
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OPS_TOKEN: ${OPS_TOKEN:?set OPS_TOKEN}
+      DATABASE_URL: postgresql+asyncpg://orders_svc:${ORDERS_DB_PASSWORD}@postgres:5432/orders
+      # Through the payments load balancer (a TCP proxy on the network path).
+      PAYMENT_SERVICE_URL: http://payments-lb:8000
+      DB_POOL_SIZE: "10"
+      DB_MAX_OVERFLOW: "0"
+      DB_POOL_TIMEOUT_S: "3"
+    mem_limit: 160m
+    memswap_limit: 160m
+    depends_on:
+      otel-collector:
+        condition: service_healthy
+      seed:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      toxiproxy:
+        condition: service_healthy
+      payment-service:
+        condition: service_healthy
+
+  user-service:
+    <<: *shop-service
+    command: ["uvicorn", "shop.user_service.main:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000", "--no-server-header", "--no-access-log"]
+    environment:
+      SERVICE_VERSION: "2.3.0"
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OPS_TOKEN: ${OPS_TOKEN:?set OPS_TOKEN}
+      DATABASE_URL: postgresql+asyncpg://users_svc:${USERS_DB_PASSWORD}@postgres:5432/users
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+    mem_limit: 160m
+    memswap_limit: 160m
+    depends_on:
+      otel-collector:
+        condition: service_healthy
+      seed:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  api-gateway:
+    <<: *shop-service
+    command: ["uvicorn", "shop.api_gateway.main:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000", "--no-server-header", "--no-access-log"]
+    environment:
+      SERVICE_VERSION: "3.1.0"
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OPS_TOKEN: ${OPS_TOKEN:?set OPS_TOKEN}
+      USER_SERVICE_URL: http://user-service:8000
+      ORDER_SERVICE_URL: http://order-service:8000
+    # Scenario 5 (bounded memory leak) relies on this limit being reachable.
+    mem_limit: 192m
+    memswap_limit: 192m
+    depends_on:
+      otel-collector:
+        condition: service_healthy
+      user-service:
+        condition: service_healthy
+      order-service:
+        condition: service_healthy
+
+  frontend:
+    <<: *shop-service
+    command: ["uvicorn", "shop.frontend.main:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000", "--no-server-header", "--no-access-log"]
+    environment:
+      SERVICE_VERSION: "1.0.0"
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OPS_TOKEN: ${OPS_TOKEN:?set OPS_TOKEN}
+      GATEWAY_URL: http://api-gateway:8000
+    ports:
+      - "127.0.0.1:8081:8000"
+    mem_limit: 128m
+    memswap_limit: 128m
+    depends_on:
+      otel-collector:
+        condition: service_healthy
+      api-gateway:
+        condition: service_healthy
+
+  loadgen:
+    # Simulated users (not instrumented). Control API: http://127.0.0.1:8089/stats, PUT /mix
+    build:
+      context: .
+      dockerfile: harness.Dockerfile
+    image: sentinelai-testbed-harness:dev
+    restart: unless-stopped
+    command: ["python", "-m", "harness.loadgen"]
+    environment:
+      TARGET_URL: http://frontend:8000
+      ORDER_SERVICE_URL: http://order-service:8000
+      SEED: ${SEED:-42}
+      LOADGEN_MIX: ${LOADGEN_MIX:-baseline}
+    ports:
+      - "127.0.0.1:8089:8089"
+    networks: [shop]
+    mem_limit: 128m
+    memswap_limit: 128m
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8089/healthz', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
+    depends_on:
+      frontend:
+        condition: service_healthy
+
+  controller:
+    # Fault-injection controller (docs/testbed.md). CLI: `make scenario-run ID=...` (runs inside
+    # this container); HTTP on 127.0.0.1:8090 with CONTROLLER_TOKEN. No Docker socket: it acts
+    # through loadgen, Toxiproxy, Postgres and the services' ops endpoints only.
+    build:
+      context: .
+      dockerfile: harness.Dockerfile
+    image: sentinelai-testbed-harness:dev
+    restart: unless-stopped
+    command: ["python", "-m", "harness.controller", "serve", "--port", "8090"]
+    environment:
+      CONTROLLER_TOKEN: ${CONTROLLER_TOKEN:?set CONTROLLER_TOKEN}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      OPS_TOKEN: ${OPS_TOKEN:?set OPS_TOKEN}
+      SEED: ${SEED:-42}
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      RELEASES_FILE: /releases/releases.json
+      RUNS_DIR: /runs
+      SCENARIOS_DIR: /app/scenarios
+    volumes:
+      - releases:/releases
+      - ./runs:/runs
+    ports:
+      - "127.0.0.1:8090:8090"
+    networks: [shop]
+    mem_limit: 128m
+    memswap_limit: 128m
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8090/healthz', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
+    depends_on:
+      loadgen:
+        condition: service_healthy
+
+  deployer:
+    # One-shot deploy pipeline: `make deploy SERVICE=... VERSION=...`
+    profiles: [tools]
+    build:
+      context: .
+      dockerfile: harness.Dockerfile
+    image: sentinelai-testbed-harness:dev
+    entrypoint: ["python", "-m", "harness.deploy"]
+    environment:
+      OPS_TOKEN: ${OPS_TOKEN:?set OPS_TOKEN}
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      RELEASES_FILE: /releases/releases.json
+      DEPLOY_EVENTS_FILE: /runs/deploy-events.jsonl
+    volumes:
+      - releases:/releases
+      - ./runs:/runs
+    networks: [shop]
+    mem_limit: 128m
+    memswap_limit: 128m
+
+networks:
+  shop:
+
+volumes:
+  pgdata:
+  releases:
+  promdata:
+  lokidata:

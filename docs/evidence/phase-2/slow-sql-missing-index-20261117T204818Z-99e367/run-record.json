@@ -1,0 +1,323 @@
+{
+  "schema_version": 1,
+  "kind": "run",
+  "id": "slow-sql-missing-index",
+  "number": 2,
+  "title": "Slow order-history query after its indexes are dropped",
+  "injected_fault": {
+    "trigger": "SQL change drop-order-history-indexes",
+    "description": "A schema change drops ix_orders_user_id_created_at and ix_orders_created_at on the 500k-row orders table. GET /orders (a user's newest orders) has no index left to use, so every order-history lookup scans the table, and the account page that shows it slows down with it. Nothing errors.",
+    "stop": "CREATE both indexes again"
+  },
+  "root_cause": {
+    "category": "slow_query",
+    "service": "order-service",
+    "component": "orders table: missing indexes ix_orders_user_id_created_at (user_id, created_at DESC) and ix_orders_created_at (created_at)",
+    "summary": "The order-history query filters orders by user_id and sorts by created_at; with neither the composite index nor the created_at index it scans the 500k-row table on every request, so GET /orders p95 latency rises by orders of magnitude and the frontend account page slows with it. No errors are returned.",
+    "code_location": {
+      "path": "services/shop/order_service/db.py",
+      "symbol": "ix_orders_user_id_created_at"
+    }
+  },
+  "expected_symptoms": [
+    {
+      "id": "orders-p95-slow",
+      "signal": "metric",
+      "backend": "prometheus",
+      "description": "order-service GET /orders p95 latency at least 5x this run's baseline p95 (floor 50 ms), for 2 minutes.",
+      "query": "histogram_quantile(0.95, sum by (le) (rate(http_server_request_duration_seconds_bucket{service_name=\"order-service\", http_route=\"/orders\", http_request_method=\"GET\"}[1m])))",
+      "condition": {
+        "op": ">",
+        "threshold": 5,
+        "relative_to_baseline": true,
+        "min_value": 0.05,
+        "min_points": 8
+      }
+    },
+    {
+      "id": "account-p95-slow",
+      "signal": "metric",
+      "backend": "prometheus",
+      "description": "The user-facing account page (frontend GET /account) p95 at least 3x its baseline (floor 50 ms), for 2 minutes.",
+      "query": "histogram_quantile(0.95, sum by (le) (rate(http_server_request_duration_seconds_bucket{service_name=\"frontend\", http_route=\"/account\", http_request_method=\"GET\"}[1m])))",
+      "condition": {
+        "op": ">",
+        "threshold": 3,
+        "relative_to_baseline": true,
+        "min_value": 0.05,
+        "min_points": 8
+      }
+    },
+    {
+      "id": "orders-slow-select-spans",
+      "signal": "trace",
+      "backend": "jaeger",
+      "description": "order-service SELECT spans of 500 ms or more: the order-history table scan (measured live with EXPLAIN ANALYZE: ~1.6 s warm without the index vs ~48 ms cold with it on the 152 MB table).",
+      "query": {
+        "service": "order-service",
+        "operation": "SELECT",
+        "min_duration_ms": 500
+      },
+      "condition": {
+        "op": ">=",
+        "threshold": 5
+      }
+    },
+    {
+      "id": "orders-no-error-spike",
+      "signal": "metric",
+      "backend": "prometheus",
+      "description": "Slow, not failing: order-service 5xx share stays below 1% throughout.",
+      "query": "(sum(rate(http_server_request_duration_seconds_count{service_name=\"order-service\", http_response_status_code=~\"5..\"}[1m])) or vector(0)) / sum(rate(http_server_request_duration_seconds_count{service_name=\"order-service\"}[1m]))",
+      "condition": {
+        "op": "<",
+        "threshold": 0.01,
+        "min_fraction": 1.0
+      }
+    }
+  ],
+  "recovery_checks": [
+    {
+      "id": "orders-p95-normal",
+      "signal": "metric",
+      "backend": "prometheus",
+      "description": "order-service GET /orders p95 back within 1.5x the run's baseline (floor 50 ms).",
+      "query": "histogram_quantile(0.95, sum by (le) (rate(http_server_request_duration_seconds_bucket{service_name=\"order-service\", http_route=\"/orders\", http_request_method=\"GET\"}[1m])))",
+      "condition": {
+        "op": "<",
+        "threshold": 1.5,
+        "relative_to_baseline": true,
+        "min_value": 0.05,
+        "min_fraction": 1.0
+      }
+    },
+    {
+      "id": "order-5xx-low",
+      "signal": "metric",
+      "backend": "prometheus",
+      "description": "order-service 5xx share below 1%.",
+      "query": "(sum(rate(http_server_request_duration_seconds_count{service_name=\"order-service\", http_response_status_code=~\"5..\"}[1m])) or vector(0)) / sum(rate(http_server_request_duration_seconds_count{service_name=\"order-service\"}[1m]))",
+      "condition": {
+        "op": "<",
+        "threshold": 0.01,
+        "min_fraction": 1.0
+      }
+    }
+  ],
+  "expected_affected_services": [
+    "order-service",
+    "api-gateway",
+    "frontend"
+  ],
+  "unaffected_services": [
+    "payment-service",
+    "user-service"
+  ],
+  "timeline": {
+    "started_at": "2026-11-17T20:50:18+00:00",
+    "ended_at": "2026-11-17T20:55:25+00:00"
+  },
+  "run": {
+    "run_id": "20261117T204818Z-99e367",
+    "seed": 42,
+    "status": "verified",
+    "mode": "full",
+    "windows": {
+      "baseline_s": 120,
+      "observe_s": 300,
+      "recovery_s": 180
+    },
+    "baseline_started_at": "2026-11-17T20:48:18+00:00",
+    "recovery_ended_at": "2026-11-17T20:58:25+00:00",
+    "baseline_healthy": true,
+    "baseline_checks": [
+      {
+        "id": "orders-p95-normal",
+        "observed": true,
+        "baseline": 0.008895833333333332,
+        "threshold": 0.05,
+        "points": 9,
+        "points_met": 9,
+        "peak": 0.00919642857142857,
+        "onset_s": 0.0,
+        "detail": "9/9 points < 0.05 (needs >= 100% of points)",
+        "evidence": [
+          "004-prometheus.json"
+        ]
+      },
+      {
+        "id": "order-5xx-low",
+        "observed": true,
+        "baseline": null,
+        "threshold": 0.01,
+        "points": 9,
+        "points_met": 9,
+        "peak": 0.0,
+        "onset_s": 0.0,
+        "detail": "9/9 points < 0.01 (needs >= 100% of points)",
+        "evidence": [
+          "005-prometheus.json"
+        ]
+      }
+    ],
+    "observed": [
+      {
+        "id": "orders-p95-slow",
+        "observed": true,
+        "baseline": 0.008895833333333332,
+        "threshold": 0.05,
+        "points": 21,
+        "points_met": 20,
+        "peak": 2.425,
+        "onset_s": 15.0,
+        "detail": "20/21 points > 0.05 (needs >= 8 consecutive points)",
+        "evidence": [
+          "006-prometheus.json"
+        ]
+      },
+      {
+        "id": "account-p95-slow",
+        "observed": true,
+        "baseline": 0.043916666666666666,
+        "threshold": 0.13175,
+        "points": 21,
+        "points_met": 20,
+        "peak": 2.425,
+        "onset_s": 15.0,
+        "detail": "20/21 points > 0.1318 (needs >= 8 consecutive points)",
+        "evidence": [
+          "007-prometheus.json"
+        ]
+      },
+      {
+        "id": "orders-slow-select-spans",
+        "observed": true,
+        "baseline": null,
+        "threshold": 5.0,
+        "points": 50,
+        "points_met": 50,
+        "peak": 50.0,
+        "onset_s": 256.7,
+        "detail": "50 matching traces >= 5?",
+        "evidence": [
+          "008-jaeger.json"
+        ]
+      },
+      {
+        "id": "orders-no-error-spike",
+        "observed": true,
+        "baseline": null,
+        "threshold": 0.01,
+        "points": 21,
+        "points_met": 21,
+        "peak": 0.0,
+        "onset_s": 0.0,
+        "detail": "21/21 points < 0.01 (needs >= 100% of points)",
+        "evidence": [
+          "009-prometheus.json"
+        ]
+      }
+    ],
+    "recovery": [
+      {
+        "id": "orders-p95-normal",
+        "observed": true,
+        "baseline": 0.008895833333333332,
+        "threshold": 0.05,
+        "points": 7,
+        "points_met": 7,
+        "peak": 0.009049999999999996,
+        "onset_s": 0.0,
+        "detail": "7/7 points < 0.05 (needs >= 100% of points)",
+        "evidence": [
+          "010-prometheus.json"
+        ]
+      },
+      {
+        "id": "order-5xx-low",
+        "observed": true,
+        "baseline": null,
+        "threshold": 0.01,
+        "points": 7,
+        "points_met": 7,
+        "peak": 0.0,
+        "onset_s": 0.0,
+        "detail": "7/7 points < 0.01 (needs >= 100% of points)",
+        "evidence": [
+          "011-prometheus.json"
+        ]
+      }
+    ],
+    "fingerprint": {
+      "symptoms": [
+        {
+          "id": "account-p95-slow",
+          "onset_bucket": 1,
+          "magnitude_bucket": 4
+        },
+        {
+          "id": "orders-no-error-spike",
+          "onset_bucket": 0,
+          "magnitude_bucket": null
+        },
+        {
+          "id": "orders-p95-slow",
+          "onset_bucket": 1,
+          "magnitude_bucket": 4
+        },
+        {
+          "id": "orders-slow-select-spans",
+          "onset_bucket": null,
+          "magnitude_bucket": 3
+        }
+      ]
+    },
+    "memory": {
+      "min_available_mb": 10229,
+      "abort_below_mb": 500
+    },
+    "reasons": [],
+    "steps": [
+      {
+        "at": "2026-11-17T20:48:18+00:00",
+        "step": "reset",
+        "detail": "scenario slow-sql-missing-index (full)"
+      },
+      {
+        "at": "2026-11-17T20:48:18+00:00",
+        "step": "sql",
+        "detail": "revert drop-order-history-indexes"
+      },
+      {
+        "at": "2026-11-17T20:48:18+00:00",
+        "step": "traffic",
+        "detail": "mix=baseline seed=42"
+      },
+      {
+        "at": "2026-11-17T20:50:18+00:00",
+        "step": "baseline",
+        "detail": "healthy: orders-p95-normal, order-5xx-low"
+      },
+      {
+        "at": "2026-11-17T20:50:18+00:00",
+        "step": "sql",
+        "detail": "apply drop-order-history-indexes"
+      },
+      {
+        "at": "2026-11-17T20:55:18+00:00",
+        "step": "observe",
+        "detail": "orders-p95-slow=yes, account-p95-slow=yes, orders-slow-select-spans=yes, orders-no-error-spike=yes"
+      },
+      {
+        "at": "2026-11-17T20:55:25+00:00",
+        "step": "sql",
+        "detail": "revert drop-order-history-indexes"
+      },
+      {
+        "at": "2026-11-17T20:58:25+00:00",
+        "step": "recovery",
+        "detail": "orders-p95-normal=ok, order-5xx-low=ok"
+      }
+    ]
+  }
+}
