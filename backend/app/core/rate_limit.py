@@ -22,8 +22,8 @@ logger = get_logger("app.rate_limit")
 
 # INCR the window counter; set its TTL only when it is created. Atomic.
 _INCR_WITH_TTL = """
-local current = redis.call('INCR', KEYS[1])
-if current == 1 then
+local current = redis.call('INCRBY', KEYS[1], ARGV[2])
+if current == tonumber(ARGV[2]) then
   redis.call('EXPIRE', KEYS[1], ARGV[1])
 end
 return current
@@ -58,12 +58,14 @@ class RateLimiter:
         self._prefix = prefix
         self._clock = clock
 
-    async def hit(self, scope: str, identifier: str, *, limit: int, window_seconds: int) -> None:
-        """Count one attempt; raise RateLimitedError when over `limit` in the window."""
+    async def hit(
+        self, scope: str, identifier: str, *, limit: int, window_seconds: int, cost: int = 1
+    ) -> None:
+        """Count `cost` units; raise RateLimitedError when over `limit` in the window."""
         window = current_window(self._clock(), window_seconds)
         key = f"{self._prefix}:{scope}:{identifier}:{window.bucket}"
         try:
-            count = int(await self._redis.eval(_INCR_WITH_TTL, 1, key, window_seconds + 1))
+            count = int(await self._redis.eval(_INCR_WITH_TTL, 1, key, window_seconds + 1, cost))
         except (RedisError, OSError) as exc:
             logger.error("rate_limit.redis_unavailable", scope=scope, error=type(exc).__name__)
             raise DependencyUnavailableError(

@@ -11,7 +11,7 @@ Plan: `docs/plans/phase-3.md`, approved 2026-11-19 (D1–D6 as proposed). Work r
 |---|---|
 | T1 Registry | done — see below |
 | T2 Telemetry storage | done — see below |
-| T3 OTLP endpoint | not started |
+| T3 OTLP endpoint | done — see below |
 | T4 Ingest writer | not started |
 | T5 Testbed wiring (live) | not started |
 | T6 Dependency graph | not started |
@@ -59,6 +59,37 @@ Plan: `docs/plans/phase-3.md`, approved 2026-11-19 (D1–D6 as proposed). Work r
   without (rollup 9.0 → 0.9 ms) → `jit=off` on SentinelAI's connections (tested).
 - Plan deviation: the maintenance CLI lives in `app/cli/` (not `scripts/`), because
   `backend/.dockerignore` keeps dev scripts out of the image.
+
+### T3 OTLP endpoint (2026-11-19)
+- Separate **`ingest`** process/container (`app.ingest_main`, port 8001, `mem_limit 384m`):
+  `POST /api/v1/otlp/v1/{traces,logs,metrics}`, OTLP protobuf or JSON (hex ids), gzip or identity.
+  Order: body cap (4 MiB) → key auth (`sai_…`, 10 s cache) → per-key requests/s (50) → decode
+  (gunzip capped at 16 MiB) → records per request (10,000) → per-key records/s (20,000) →
+  per-record validation/normalization (in a worker thread) → bounded enqueue → OTLP response with
+  `partial_success`. Codes: 400 malformed, 401 key, 413 size/records, 415 media type, 429 rate
+  (Retry-After), 503 queue full / Redis down (Retry-After 5).
+- Validation drops and counts per reason (ids, timestamps outside `now-2h … now+5min`, names,
+  kinds, metric values, unsupported metric types, `service_mismatch`). Attributes bounded (≤ 32
+  keys, values ≤ 256 chars) with **secret-looking keys redacted at ingest**. Org/service always come
+  from the key. Deploy events (`event.name=deployment`, emitted by `deploy-pipeline`) are accepted on
+  the key of the service named in `deployment.service.name` and become `deployments` rows.
+- Migration `0004`: `metric_series.temporality`. Dependencies: `opentelemetry-proto` (protobuf
+  decode); dev `types-protobuf` (mypy stubs). ADR 0002 documents the key-lookup exception.
+- Verified: **294 backend tests pass** (+54: 20 ingest API integration — protobuf/JSON/gzip, partial
+  success, malformed → 400 + counted + process keeps serving, cross-tenant/service mismatch,
+  401 for missing/revoked/archived, 429 requests and records, 413 records/body/gzip bomb, 415, 503
+  with Retry-After, real Celery/Redis queue bound; unit tests for decode, attributes, normalization,
+  wire format, key cache/revocation). ruff/mypy strict clean (127 files).
+- **Live overload** (`docs/evidence/phase-3/t3-overload.md`, no writer consuming): 6,091 requests
+  in 40 s from 16 senders → 109 × 200, 5,278 × 429, 704 × 503, 0 client errors; ingest memory
+  78.7 → peak 126.7 MiB of 384 MiB, 0 restarts, not OOM-killed.
+- Plan deviation: the queue bound is **max pending batches (LLEN of the broker list, default 100)
+  + max normalized batch size (2 MiB)** instead of a byte-total counter — same bound, but it cannot
+  drift if a writer dies. Check-then-send may overshoot by the number of in-flight requests
+  (observed: 109 vs 100).
+- Limitations: rejections are written to `ingest_usage` by the T4 writer (best effort for
+  malformed requests when the queue is full; Prometheus counts always); no per-IP limit on failed
+  auth (the ingest port binds to 127.0.0.1 / the compose network).
 
 ## Phase 2 report (2026-11-17) — testbed
 
@@ -160,7 +191,7 @@ compose, tests), `.github/workflows/testbed-live.yml`, `.github/workflows/testbe
 |---|---|---|
 | 1. Foundation | **Complete, merged to main (2026-11-17)** | Plan: `docs/plans/phase-1.md`. |
 | 2. Testbed | **Complete, merged to main (PR #1)** | Plan: `docs/plans/phase-2.md`; ADR 0003 accepted; live verification moved to Codespaces/CI (ADR 0004, `docs/codespaces.md`). |
-| 3. Incident management | **In progress** — T1–T2 done | Plan: `docs/plans/phase-3.md` (approved 2026-11-19). |
+| 3. Incident management | **In progress** — T1–T3 done | Plan: `docs/plans/phase-3.md` (approved 2026-11-19). |
 | 4. Investigation engine | Not started | |
 | 5. Recovery | Not started | |
 | 6. Hardening + evaluation | Not started | |

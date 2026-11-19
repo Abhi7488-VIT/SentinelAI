@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from prometheus_client import Counter, Histogram
+from prometheus_client import Counter, Gauge, Histogram
 
 HTTP_REQUESTS = Counter(
     "http_requests_total",
@@ -19,4 +19,20 @@ AUTH_EVENTS = Counter(
     "auth_events_total",
     "Authentication events by action and outcome.",
     ["action", "outcome"],
+)
+
+# ---- OTLP ingestion (labels are fixed enums: signal, outcome, reason) ----
+INGEST_REQUESTS = Counter(
+    "ingest_requests_total",
+    "OTLP ingest requests by signal and outcome.",
+    ["signal", "outcome"],
+)
+INGEST_RECORDS = Counter(
+    "ingest_records_total",
+    "OTLP records by signal, outcome (accepted/rejected) and rejection reason.",
+    ["signal", "outcome", "reason"],
+)
+INGEST_QUEUE_PENDING = Gauge(
+    "ingest_queue_pending",
+    "Batches waiting in the ingest queue (sampled on each enqueue).",
 )

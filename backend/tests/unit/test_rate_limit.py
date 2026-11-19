@@ -16,10 +16,10 @@ class FakeRedis:
         self.counts: dict[str, int] = {}
         self.fail = fail
 
-    async def eval(self, _script: str, _numkeys: int, key: str, _ttl: int) -> int:
+    async def eval(self, _script: str, _numkeys: int, key: str, _ttl: int, cost: int) -> int:
         if self.fail:
             raise RedisConnectionError("down")
-        self.counts[key] = self.counts.get(key, 0) + 1
+        self.counts[key] = self.counts.get(key, 0) + cost
         return self.counts[key]
 
 
@@ -69,3 +69,11 @@ def test_hashed_identifier_normalizes_and_hides_email() -> None:
     a = hashed_identifier(" Alice@Example.com ")
     assert a == hashed_identifier("alice@example.com")
     assert "alice" not in a
+
+
+async def test_cost_counts_units() -> None:
+    limiter = _limiter(FakeRedis(), [1000.0])
+    await limiter.hit("records", "k", limit=100, window_seconds=1, cost=60)
+    await limiter.hit("records", "k", limit=100, window_seconds=1, cost=40)  # exactly 100: ok
+    with pytest.raises(RateLimitedError):
+        await limiter.hit("records", "k", limit=100, window_seconds=1, cost=1)

@@ -200,6 +200,7 @@ class MetricSeries(Base):
         UniqueConstraint("org_id", "id", name="uq_metric_series_org_id_id"),
         CheckConstraint("octet_length(series_hash) = 32", name="series_hash_length"),
         CheckConstraint("kind BETWEEN 1 AND 3", name="kind_valid"),
+        CheckConstraint("temporality BETWEEN 0 AND 2", name="temporality_valid"),
         # Saturation rules: series of a service by metric name (T7).
         Index("ix_metric_series_service_name", "org_id", "service_id", "name"),
     )
@@ -212,6 +213,8 @@ class MetricSeries(Base):
     unit: Mapped[str | None] = mapped_column(String(64))
     kind: Mapped[int] = mapped_column(SmallInteger, nullable=False)
     is_monotonic: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    # OTLP AggregationTemporality: 0 unspecified, 1 delta, 2 cumulative (decides rate math).
+    temporality: Mapped[int] = mapped_column(SmallInteger, nullable=False, server_default=text("0"))
     attributes: Mapped[dict[str, Any]] = mapped_column(
         JSONB, nullable=False, server_default=text("'{}'::jsonb")
     )

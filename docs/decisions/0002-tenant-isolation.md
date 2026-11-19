@@ -39,6 +39,10 @@ store sensitive operational data (telemetry, code, incidents), so a missed filte
 - `MembershipRepository` / `OrganizationRepository`: they *establish* tenancy. Queries filter by
   the authenticated user's own id (`organization_members.user_id`) or by an org id whose membership
   was just verified.
+- `find_key_by_prefix` (`app/repositories/ingest_keys.py`, Phase 3): OTLP ingest authentication.
+  There is no TenantContext before the key is verified — the key *is* the tenant credential. The
+  lookup is by the key's public prefix and returns only what authentication needs; the org and
+  service of every ingested record are then taken from the verified key, never from the payload.
 - `AuditLogWriter`: insert-only; user-level events (login) legitimately have `org_id = NULL`.
   Reads go through the scoped `AuditLogRepository`.
 
