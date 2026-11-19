@@ -18,7 +18,7 @@ Plan: `docs/plans/phase-3.md`, approved 2026-11-19 (D1–D6 as proposed). Work r
 | T7 Detection | done — see below |
 | T8 Correlation + incidents | done — see below (grouping verified in tests; live S1 is T10) |
 | T9 UI | not started |
-| T10 Live acceptance + benchmarks | in progress — quiet baseline done; **S1 run `20261119T171535Z-e076ed`: FAIL** (timestamp bug in metric/health rules; fix proposed, awaiting go-ahead) |
+| T10 Live acceptance + benchmarks | in progress — quiet baseline ×2 clean; **S1 PASS** (run `20261119T211437Z-1eaa97`, evaluator `afcafd7`); earlier FAIL runs kept; benchmarks not yet run |
 | T11 Docs + report | not started |
 
 ### T1 Registry (2026-11-19)
@@ -262,6 +262,23 @@ Plan: `docs/plans/phase-3.md`, approved 2026-11-19 (D1–D6 as proposed). Work r
   (now − 30 s). This puts the incident start outside the fault window and counts 1 false positive.
   Fix proposed (evaluate all rules as of `eval_end`, tests that fail on current code, re-run
   baseline + S1); **not applied**. Evidence: `docs/evidence/phase-3/s1-20261119T171535Z-e076ed/`.
+
+### T10 (part 3) Fix, baseline re-run, S1 re-runs (2026-11-19, live)
+- Fix `0a9b73b`: saturation and health rules evaluated as of `eval_end` (tests that failed on the
+  old code). Quiet baseline re-run 18:48–18:58Z on `0a9b73b`
+  (`docs/evidence/phase-3/t10-baseline-20261119T1848Z/`): **0 detections, 0 incidents**, 40 ticks.
+- S1 run `20261119T185934Z-335bba`: one incident, the 3 expected services, 0 false positives, but
+  **FAIL** on `grouping_is_structural`. Traced (`87d5c41`) to the evaluator, not SentinelAI: it
+  exempted `detections[0]` as the opener, but the API sorts by `(started_at, id)` and all 7 started
+  in the same bucket. Evaluator fix `afcafd7`: the opener is the detection named by the incident's
+  `created` event (pass rule unchanged). The `335bba` re-score is PASS; the original FAIL output is
+  kept next to it.
+- **S1 run `20261119T211437Z-1eaa97` (fresh, after 30 min warm-up, evaluator `afcafd7`): PASS.**
+  Harness VERIFIED (fault 21:16:37Z → 21:21:37Z). Incident #3 "Latency, errors and resource
+  saturation in api-gateway, frontend, order-service", critical; 7 detections, every joiner with
+  ≥ 1 reason; payment-service and user-service excluded; 0 false positives; first detection 68 s
+  and incident 112.7 s after fault start. One run at one seed: shows the golden path works on this
+  run, not a detection rate. Evidence: `docs/evidence/phase-3/s1-20261119T211437Z-1eaa97/`.
 
 ## Phase 2 report (2026-11-17) — testbed
 
