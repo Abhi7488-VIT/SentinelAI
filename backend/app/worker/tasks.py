@@ -14,6 +14,7 @@ from app.core.config import Settings, get_settings
 from app.core.logging import get_logger
 from app.ingest.batch import decode_batch
 from app.ingest.dead_letter import dead_letter
+from app.services.detection import run_tick
 from app.services.ingest_writer import WriteResult, write_batch
 from app.services.service_graph import discover_edges
 from app.services.telemetry_maintenance import run_maintenance
@@ -49,6 +50,26 @@ def discover_graph_edges() -> dict[str, Any]:
         settings, lambda session: discover_edges(session), application_name="sentinelai-graph"
     )
     return asdict(result)
+
+
+@shared_task(name="detection.tick")
+def detection_tick() -> dict[str, Any]:
+    """Rollups → rules → detections for the current 15-s bucket. Idempotent per bucket."""
+    settings = get_settings()
+    result = run_with_session(
+        settings, lambda session: run_tick(session), application_name="sentinelai-detection"
+    )
+    return {
+        "ran": result.ran,
+        "eval_end": result.eval_end.isoformat() if result.eval_end else None,
+        "orgs": result.orgs,
+        "services": result.services,
+        "evaluated": result.evaluated,
+        "fired": [str(i) for i in result.fired],
+        "resolved": [str(i) for i in result.resolved],
+        "escalated": [str(i) for i in result.escalated],
+        "duration_ms": result.duration_ms,
+    }
 
 
 def retry_countdown(retries: int, rng: Callable[[], float] = random.random) -> float:

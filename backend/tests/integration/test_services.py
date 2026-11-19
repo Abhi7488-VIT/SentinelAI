@@ -56,7 +56,7 @@ async def test_service_crud(
     assert created["last_seen_at"] is None
     assert created["dependencies"] == []
     assert created["deployment"]["platform"] == "docker-compose"
-    assert created["telemetry_config"] == {"memory_limit_bytes": 167772160}
+    assert created["telemetry_config"] == {"memory_limit_bytes": 167772160, "detection": None}
 
     url = f"{_base(alice)}/{created['id']}"
     got = await client.get(url, headers=alice.headers)

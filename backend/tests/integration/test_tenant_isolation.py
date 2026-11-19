@@ -116,6 +116,7 @@ async def test_every_org_scoped_route_hides_other_orgs(
         "user_id": alice.user_id,
         "service_id": project["_service"]["id"],
         "key_id": project["_key"]["id"],
+        "detection_id": "00000000-0000-4000-8000-000000000001",
     }
     checked = 0
     # Enumerate endpoints from the public OpenAPI schema (covers every included router).

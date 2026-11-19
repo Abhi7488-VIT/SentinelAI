@@ -1,6 +1,12 @@
 """ORM models. Importing this package registers every table on Base.metadata."""
 
 from app.models.audit_log import AuditLog
+from app.models.detection import (
+    Detection,
+    DetectorState,
+    ServiceInstance,
+    ServiceWindowStats,
+)
 from app.models.graph import EdgeSource, ServiceEdge
 from app.models.organization import Organization, OrganizationMember, Role
 from app.models.project import Project
@@ -20,6 +26,8 @@ from app.models.user import User
 __all__ = [
     "AuditLog",
     "Deployment",
+    "Detection",
+    "DetectorState",
     "EdgeSource",
     "HealthStatus",
     "IngestBatch",
@@ -36,6 +44,8 @@ __all__ = [
     "ServiceApiKey",
     "ServiceDependency",
     "ServiceEdge",
+    "ServiceInstance",
+    "ServiceWindowStats",
     "Span",
     "User",
 ]

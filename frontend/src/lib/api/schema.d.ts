@@ -142,6 +142,60 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/orgs/{org_id}/detections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Detections
+         * @description Newest first. `from`/`to` filter on `started_at` (half-open).
+         */
+        get: operations["list_detections_api_v1_orgs__org_id__detections_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/orgs/{org_id}/detections/{detection_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Detection */
+        get: operations["get_detection_api_v1_orgs__org_id__detections__detection_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/orgs/{org_id}/detector-states": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Detector States */
+        get: operations["list_detector_states_api_v1_orgs__org_id__detector_states_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/orgs/{org_id}/members": {
         parameters: {
             query?: never;
@@ -526,6 +580,113 @@ export interface components {
             /** Target Service Id */
             target_service_id: string | null;
         };
+        /** DetectionOut */
+        DetectionOut: {
+            /** Baseline Value */
+            baseline_value: number | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Evidence */
+            evidence: {
+                [key: string]: unknown;
+            };
+            /**
+             * Explanation
+             * @description Filled from the numbers in `evidence` (no model).
+             */
+            explanation: string;
+            /**
+             * Fired At
+             * Format: date-time
+             */
+            fired_at: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Last Value */
+            last_value: number | null;
+            /** Metric */
+            metric: string;
+            /** Observed Value */
+            observed_value: number | null;
+            /** Peak Value */
+            peak_value: number | null;
+            /** Resolved At */
+            resolved_at: string | null;
+            /**
+             * Rule
+             * @enum {string}
+             */
+            rule: "error_rate" | "latency_shift" | "resource_saturation" | "health_check" | "deploy_change";
+            /**
+             * Service Id
+             * Format: uuid
+             */
+            service_id: string;
+            /**
+             * Severity
+             * @enum {string}
+             */
+            severity: "warning" | "critical";
+            /**
+             * Started At
+             * Format: date-time
+             */
+            started_at: string;
+            /** Threshold */
+            threshold: number | null;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** DetectorStateOut */
+        DetectorStateOut: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Last Cond */
+            last_cond: string | null;
+            /** Last Evaluated At */
+            last_evaluated_at: string | null;
+            /** Last Value */
+            last_value: number | null;
+            /** Open Detection Id */
+            open_detection_id: string | null;
+            /**
+             * Rule
+             * @enum {string}
+             */
+            rule: "error_rate" | "latency_shift" | "resource_saturation" | "health_check" | "deploy_change";
+            /**
+             * Service Id
+             * Format: uuid
+             */
+            service_id: string;
+            /**
+             * Since
+             * Format: date-time
+             */
+            since: string;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "ok" | "pending" | "firing" | "resolving" | "warming_up";
+        };
         /** ErrorBody */
         ErrorBody: {
             /** Code */
@@ -769,6 +930,20 @@ export interface components {
             /** Next Cursor */
             next_cursor: string | null;
         };
+        /** Page[DetectionOut] */
+        Page_DetectionOut_: {
+            /** Items */
+            items: components["schemas"]["DetectionOut"][];
+            /** Next Cursor */
+            next_cursor: string | null;
+        };
+        /** Page[DetectorStateOut] */
+        Page_DetectorStateOut_: {
+            /** Items */
+            items: components["schemas"]["DetectorStateOut"][];
+            /** Next Cursor */
+            next_cursor: string | null;
+        };
         /** Page[MemberOut] */
         Page_MemberOut_: {
             /** Items */
@@ -898,6 +1073,26 @@ export interface components {
          * @enum {string}
          */
         Role: "viewer" | "engineer" | "admin" | "owner";
+        /**
+         * RuleOverride
+         * @description Override of one detection rule's defaults (ADR 0006). Unset fields keep the default.
+         */
+        RuleOverride: {
+            /** Clear */
+            clear?: number | null;
+            /** Clear Duration S */
+            clear_duration_s?: number | null;
+            /** Critical */
+            critical?: number | null;
+            /** Enabled */
+            enabled?: boolean | null;
+            /** Fire */
+            fire?: number | null;
+            /** Min Duration S */
+            min_duration_s?: number | null;
+            /** Min Samples */
+            min_samples?: number | null;
+        };
         /** ServiceCreate */
         ServiceCreate: {
             deployment?: components["schemas"]["ServiceDeployment"];
@@ -1012,9 +1207,13 @@ export interface components {
         };
         /**
          * TelemetryConfig
-         * @description Per-service telemetry settings. Detection rule overrides are added in Phase 3 T7.
+         * @description Per-service telemetry settings.
          */
         TelemetryConfig: {
+            /** Detection */
+            detection?: {
+                [key: string]: components["schemas"]["RuleOverride"];
+            } | null;
             /** Memory Limit Bytes */
             memory_limit_bytes?: number | null;
         };
@@ -1805,6 +2004,220 @@ export interface operations {
             };
             /** @description Too Many Requests */
             429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_detections_api_v1_orgs__org_id__detections_get: {
+        parameters: {
+            query?: {
+                service_id?: string | null;
+                rule?: ("error_rate" | "latency_shift" | "resource_saturation" | "health_check" | "deploy_change") | null;
+                status?: ("open" | "resolved") | null;
+                from?: string | null;
+                to?: string | null;
+                limit?: number;
+                cursor?: string | null;
+            };
+            header?: never;
+            path: {
+                org_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page_DetectionOut_"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_detection_api_v1_orgs__org_id__detections__detection_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                detection_id: string;
+                org_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetectionOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_detector_states_api_v1_orgs__org_id__detector_states_get: {
+        parameters: {
+            query?: {
+                service_id?: string | null;
+                limit?: number;
+                cursor?: string | null;
+            };
+            header?: never;
+            path: {
+                org_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page_DetectorStateOut_"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };

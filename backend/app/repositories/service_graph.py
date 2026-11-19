@@ -256,3 +256,16 @@ class ServiceEdgeRepository(TenantRepository[ServiceEdge]):
             .limit(limit)
         )
         return list((await self.session.scalars(stmt)).all())
+
+    async def neighbors(self, service_id: uuid.UUID) -> set[uuid.UUID]:
+        """Services with a direct edge to or from `service_id` (any source)."""
+        stmt = select(ServiceEdge.source_service_id, ServiceEdge.target_service_id).where(
+            ServiceEdge.org_id == self.ctx.org_id,
+            ServiceEdge.target_service_id.is_not(None),
+            (ServiceEdge.source_service_id == service_id)
+            | (ServiceEdge.target_service_id == service_id),
+        )
+        out: set[uuid.UUID] = set()
+        for src, tgt in (await self.session.execute(stmt)).all():
+            out.update(x for x in (src, tgt) if x is not None and x != service_id)
+        return out

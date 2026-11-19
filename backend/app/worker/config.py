@@ -34,6 +34,13 @@ def configure_celery(app: Celery, settings: Settings) -> Celery:
             },
             # Observed dependency edges over the last 2 min of spans (Phase 3 T6). Windows
             # overlap, so a skipped or expired run loses nothing.
+            # Detection pipeline (Phase 3 T7/T8). A late tick is dropped, not queued up: the
+            # next one evaluates the next bucket, and timers measure real time.
+            "detection-tick": {
+                "task": "detection.tick",
+                "schedule": 15.0,
+                "options": {"expires": 14},
+            },
             "graph-discover-edges": {
                 "task": "graph.discover_edges",
                 "schedule": 60.0,

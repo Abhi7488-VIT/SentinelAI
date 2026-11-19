@@ -29,6 +29,10 @@ EXPECTED_TABLES = {
     "deployments",
     "ingest_usage",
     "ingest_batches",
+    "service_window_stats",
+    "service_instances",
+    "detector_states",
+    "detections",
 }
 
 

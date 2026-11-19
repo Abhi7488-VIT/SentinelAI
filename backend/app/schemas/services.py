@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from pydantic import (
     AfterValidator,
@@ -16,6 +16,7 @@ from pydantic import (
     model_validator,
 )
 
+from app.detection.rules import Rule, params_for
 from app.models.service import (
     ENVIRONMENT_PATTERN,
     EXTERNAL_TARGET_PATTERN,
@@ -35,6 +36,7 @@ Environment = Annotated[
 ExternalTarget = Annotated[
     str, StringConstraints(strip_whitespace=True, max_length=255, pattern=EXTERNAL_TARGET_PATTERN)
 ]
+OverridableRule = Literal["error_rate", "latency_shift", "resource_saturation", "health_check"]
 ShortText = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=64)]
 
 _MIB = 1024 * 1024
@@ -61,13 +63,39 @@ class ServiceDeployment(BaseModel):
     current_version: ShortText | None = None
 
 
+class RuleOverride(BaseModel):
+    """Override of one detection rule's defaults (ADR 0006). Unset fields keep the default."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool | None = None
+    fire: float | None = Field(default=None, gt=0, le=1_000_000)
+    clear: float | None = Field(default=None, ge=0, le=1_000_000)
+    critical: float | None = Field(default=None, gt=0, le=1_000_000)
+    min_samples: int | None = Field(default=None, ge=1, le=100_000)
+    min_duration_s: int | None = Field(default=None, ge=0, le=3600)
+    clear_duration_s: int | None = Field(default=None, ge=0, le=3600)
+
+
 class TelemetryConfig(BaseModel):
-    """Per-service telemetry settings. Detection rule overrides are added in Phase 3 T7."""
+    """Per-service telemetry settings."""
 
     model_config = ConfigDict(extra="forbid")
 
     # Needed by the memory-saturation rule; without it that rule stays inactive.
     memory_limit_bytes: int | None = Field(default=None, ge=_MIB, le=1024 * 1024 * _MIB)
+    # Detection rule overrides, by rule name (deploy_change has no tunable thresholds).
+    detection: dict[OverridableRule, RuleOverride] | None = None
+
+    @model_validator(mode="after")
+    def _hysteresis(self) -> TelemetryConfig:
+        for rule, override in (self.detection or {}).items():
+            merged = params_for(Rule(rule), override.model_dump(exclude_none=True))
+            if merged.clear >= merged.fire:
+                raise ValueError(f"detection.{rule}: clear must be below fire")
+            if merged.critical is not None and merged.critical < merged.fire:
+                raise ValueError(f"detection.{rule}: critical must be at or above fire")
+        return self
 
 
 class ServiceCreate(BaseModel):

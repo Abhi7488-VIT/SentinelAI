@@ -20,9 +20,12 @@ from app.core.config import Settings
 from app.core.logging import get_logger
 from app.models.telemetry import PARTITIONED_TABLES
 from app.repositories import telemetry_partitions as parts
+from app.repositories.detection import delete_rollups_before
 
 logger = get_logger("app.telemetry.maintenance")
 BATCH_ID_RETENTION = timedelta(days=2)
+# Detection rollups and instance records (Phase 3 plan §3.3: 30 days).
+ROLLUP_RETENTION = timedelta(days=30)
 
 
 @dataclass(frozen=True, slots=True)
@@ -32,6 +35,8 @@ class MaintenanceResult:
     dropped: list[str] = field(default_factory=list)
     usage_rows_deleted: int = 0
     batch_ids_deleted: int = 0
+    rollup_rows_deleted: int = 0
+    instance_rows_deleted: int = 0
 
 
 def retention_days(settings: Settings) -> dict[str, int]:
@@ -75,6 +80,9 @@ async def run_maintenance(
     )
     # Processed-batch ids only need to outlive any queue redelivery (hours); keep two days.
     batches_deleted = await parts.delete_batches_before(session, now - BATCH_ID_RETENTION)
+    rollups_deleted, instances_deleted = await delete_rollups_before(
+        session, now - ROLLUP_RETENTION
+    )
     await session.commit()
     logger.info(
         "telemetry_maintenance_done",
@@ -82,6 +90,8 @@ async def run_maintenance(
         dropped=dropped,
         usage_rows_deleted=usage_deleted,
         batch_ids_deleted=batches_deleted,
+        rollup_rows_deleted=rollups_deleted,
+        instance_rows_deleted=instances_deleted,
     )
     return MaintenanceResult(
         ran=True,
@@ -89,4 +99,6 @@ async def run_maintenance(
         dropped=dropped,
         usage_rows_deleted=usage_deleted,
         batch_ids_deleted=batches_deleted,
+        rollup_rows_deleted=rollups_deleted,
+        instance_rows_deleted=instances_deleted,
     )

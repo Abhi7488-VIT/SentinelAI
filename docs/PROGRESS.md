@@ -15,7 +15,7 @@ Plan: `docs/plans/phase-3.md`, approved 2026-11-19 (D1–D6 as proposed). Work r
 | T4 Ingest writer | done — see below |
 | T5 Testbed wiring (live) | done — see below |
 | T6 Dependency graph | done — see below |
-| T7 Detection | not started |
+| T7 Detection | done — see below |
 | T8 Correlation + incidents | not started |
 | T9 UI | not started |
 | T10 Live acceptance + benchmarks | not started — **stop and report** after the S1 run and after the 10-min quiet baseline |
@@ -166,6 +166,41 @@ Plan: `docs/plans/phase-3.md`, approved 2026-11-19 (D1–D6 as proposed). Work r
   `db.namespace`); `call_count` = calls in the latest 2-min window; messaging edges and HTTP calls
   to uninstrumented hosts are not discovered; worker processes still expose no Prometheus
   endpoint (job emits a structured `graph_discovery_done` log with counts and duration).
+
+### T7 Detection (2026-11-19, live pipeline; no fault injected yet)
+- Migration `0007`: `service_window_stats` (15-s buckets: bucket-local requests/errors/p50/p95/p99
+  + trailing-60-s requests/errors/p95 + top-5 exception signatures), `service_instances`,
+  `detector_states`, `detections` (`UNIQUE (org, service, rule, started_at)`). ADR 0006 written.
+- Pure logic in `app/detection/`: rules (error_rate, latency_shift, resource_saturation,
+  health_check; deploy_change in the engine), state machine (min duration, hysteresis, NO_DATA
+  holds, warming_up, gap restarts timers), templated explanations, exception signatures.
+- `detection.tick` (beat, 15 s): eval at now − 30 s on the 15-s grid; advisory lock, one
+  transaction; per-detector idempotency on `last_evaluated_at`. Severity: warning → critical only
+  beyond the critical threshold and ≥ 3 min firing. Services' `health_status` set here only.
+  Per-service overrides in `telemetry_config.detection` (validated: clear < fire ≤ critical).
+  Rollups/instances: 30-day retention in the maintenance job.
+- API: `GET /detections` (service, rule, open/resolved, from/to, cursor), `GET /detections/{id}`,
+  `GET /detector-states`.
+- Verified: **375 backend tests pass** (+43 unit: per-rule tables, short spike, flapping → one
+  detection, clear-hold, NO_DATA, warming_up, restart mid-pending, gap, explanation snapshot,
+  signatures, override validation; +6 integration over simulated time on Postgres: error spike
+  fires once at the expected times, escalates to critical, resolves after 120 s clear, links a
+  deploy, retried tick is a no-op, evidence trace ids are real error spans; short spike never
+  fires; latency warming_up then fires vs median baseline; saturated pool with waiters; crash
+  loop + heartbeat loss → critical, service `unhealthy`; API filters + cross-org 404).
+  ruff/mypy strict clean; `alembic check` clean.
+  **Live** (`docs/evidence/phase-3/t7-detection-live.md`): ticks every 15 s, first (35-min
+  backfill) 2.16 s, then ~190–310 ms for 5 services; all 20 detectors evaluating; 0 detections in
+  the first minutes of baseline (not the T10 quiet-baseline measurement). EXPLAIN: rollup uses
+  the server-span window index (8 ms per service; 331 ms one-off backfill), exceptions the error
+  index.
+- Bug found by the tests: the error-rate "baseline" window ended at the firing window, so it
+  included the anomaly's first seconds; it now ends where the first anomalous window began.
+- Plan deviations: graph node request/error counts come from `service_window_stats` (API wiring in
+  T9 with the Overview); per-minute p95 = trailing-60-s p95 at minute boundaries (same statistic,
+  no 30-min span scan per tick).
+- Limitations: one transaction per tick for all orgs (fine for one org / tens of services);
+  pool metrics only in OTel semconv names; worker metrics still logs only.
 
 ## Phase 2 report (2026-11-17) — testbed
 
