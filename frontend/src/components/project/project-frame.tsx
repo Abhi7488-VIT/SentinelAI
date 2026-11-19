@@ -45,7 +45,7 @@ export function ProjectFrame({ children }: { children: React.ReactNode }) {
   const base = `/orgs/${orgId}/projects/${projectId}`;
 
   return (
-    <div className="grid gap-6 pt-6 pb-10">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-6 pt-6 pb-10">
       <div className="grid gap-3 px-4 md:px-6">
         <p className="text-xs text-muted-foreground">
           <Link href={`/orgs/${orgId}/projects`} className="hover:underline">

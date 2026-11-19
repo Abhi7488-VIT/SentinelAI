@@ -55,7 +55,7 @@ test("register, create a project, sign out and in, and stay isolated from anothe
   const projects = page.getByRole("region", { name: "Projects" });
   await expect(projects.getByText("Checkout API")).toBeVisible();
   await expect(projects.getByText("checkout-api")).toBeVisible();
-  await expect(page.getByText("1 project · none sending telemetry yet")).toBeVisible();
+  await expect(page.getByText("1 project", { exact: true })).toBeVisible();
 
   // Survives a full reload: the session is restored from the refresh cookie.
   await page.reload();

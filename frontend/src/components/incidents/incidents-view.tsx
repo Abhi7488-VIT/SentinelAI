@@ -105,7 +105,7 @@ export function IncidentsView() {
       : { kind: "ready", incidents: query.data.pages.flatMap((p) => p.items), filtered };
 
   return (
-    <div className="grid gap-5 pt-6 pb-10">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-5 pt-6 pb-10">
       <div className="grid gap-1 px-4 md:px-6">
         <h1 className="text-[22px] leading-7 font-semibold">Incidents</h1>
         <p className="text-sm text-muted-foreground">

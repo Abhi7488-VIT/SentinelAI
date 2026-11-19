@@ -70,10 +70,12 @@ function toFlow(graph: ServiceGraph, selected: string | null): { nodes: Node[]; 
 
 export function EdgeTable({ graph }: { graph: ServiceGraph }) {
   const names = new Map(graph.nodes.map((n) => [n.id, n.name]));
-  const merged = mergeEdges(graph.edges);
+  const merged = mergeEdges(graph.edges).sort((a, b) =>
+    `${names.get(a.from)}\u0000${names.get(a.to)}`.localeCompare(`${names.get(b.from)}\u0000${names.get(b.to)}`),
+  );
   if (merged.length === 0) return null;
   return (
-    <table className="num w-full text-left text-sm">
+    <div className="overflow-x-auto"><table className="num w-full text-left text-sm">
       <caption className="sr-only">Dependencies</caption>
       <thead className="text-xs text-muted-foreground">
         <tr>
@@ -93,7 +95,7 @@ export function EdgeTable({ graph }: { graph: ServiceGraph }) {
           </tr>
         ))}
       </tbody>
-    </table>
+    </table></div>
   );
 }
 
@@ -165,7 +167,7 @@ export function ServiceMapView() {
   const node = graph.nodes.find((n) => n.id === selected) ?? null;
 
   return (
-    <div className="grid gap-4 px-4 md:px-6">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-4 px-4 md:px-6">
       <div className="flex flex-wrap gap-x-5 gap-y-1 text-xs text-muted-foreground">
         <span>— Observed (from traces)</span>
         <span>- - Declared</span>
@@ -176,7 +178,7 @@ export function ServiceMapView() {
       {graph.edges.length === 0 ? (
         <EmptyBlock>No dependencies yet: none declared, and none observed in traces in the last 7 days.</EmptyBlock>
       ) : null}
-      <div className="grid gap-4 lg:grid-cols-[1fr_280px]">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-[minmax(0,1fr)_280px]">
         <div className="h-[480px] rounded-md border border-border" aria-label="Service map canvas">
           {flow ? (
             <ReactFlow

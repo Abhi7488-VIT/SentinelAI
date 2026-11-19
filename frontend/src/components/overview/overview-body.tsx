@@ -34,7 +34,7 @@ function ServicePanel({ s, generatedAt, chart, now }: { s: OverviewService; gene
   const withData = rows.filter((r) => r.requests !== null);
   const totals = withData.reduce((a, r) => ({ req: a.req + (r.requests ?? 0), err: a.err + (r.errors ?? 0) }), { req: 0, err: 0 });
   return (
-    <li className="grid gap-3 rounded-md border border-border p-4">
+    <li className="grid min-w-0 gap-3 rounded-md border border-border p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2">
           <span className="truncate font-mono text-sm font-medium">{s.name}</span>
@@ -111,7 +111,7 @@ export function OverviewBody({
   const open = data.open_incidents.critical + data.open_incidents.warning;
   const detections = data.detections_24h.reduce((n, r) => n + r.count, 0);
   return (
-    <div className="grid gap-6 px-4 md:px-6">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-6 px-4 md:px-6">
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <Tile label="Open incidents">
           <p className="num text-2xl font-semibold">{open}</p>
@@ -142,7 +142,7 @@ export function OverviewBody({
         </Tile>
       </div>
 
-      <section aria-labelledby="latest" className="grid gap-2">
+      <section aria-labelledby="latest" className="grid grid-cols-[minmax(0,1fr)] gap-2">
         <div className="flex items-baseline justify-between">
           <h2 id="latest" className="text-sm font-semibold">
             Latest incidents
@@ -154,7 +154,7 @@ export function OverviewBody({
         {data.latest_incidents.length === 0 ? (
           <EmptyBlock>No incidents in this project.</EmptyBlock>
         ) : (
-          <ul className="grid rounded-md border border-border">
+          <ul className="grid grid-cols-[minmax(0,1fr)] rounded-md border border-border">
             {data.latest_incidents.map((i) => (
               <li key={i.id} className="flex flex-wrap items-center gap-2 border-t border-rule px-3 py-2 first:border-t-0">
                 <span className="num font-mono text-xs text-muted-foreground">#{i.number}</span>
@@ -163,14 +163,14 @@ export function OverviewBody({
                 </Link>
                 <SeverityPill severity={i.severity} />
                 <StatusPill status={i.status} />
-                <span className="num text-xs text-muted-foreground">{formatDateTime(i.started_at)}</span>
+                <span className="num hidden text-xs text-muted-foreground sm:inline">{formatDateTime(i.started_at)}</span>
               </li>
             ))}
           </ul>
         )}
       </section>
 
-      <section aria-labelledby="services" className="grid gap-2">
+      <section aria-labelledby="services" className="grid grid-cols-[minmax(0,1fr)] gap-2">
         <h2 id="services" className="text-sm font-semibold">
           Services
         </h2>
@@ -185,7 +185,7 @@ export function OverviewBody({
             No telemetry yet. Register a service and create an ingest key for its exporter.
           </EmptyBlock>
         ) : (
-          <ul className="grid gap-3 lg:grid-cols-2">
+          <ul className="grid grid-cols-[minmax(0,1fr)] gap-3 lg:grid-cols-[repeat(2,minmax(0,1fr))]">
             {data.services.map((s) => (
               <ServicePanel key={s.id} s={s} generatedAt={data.generated_at} chart={chart} now={now} />
             ))}

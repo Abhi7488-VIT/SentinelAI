@@ -85,7 +85,7 @@ export function IncidentDetailView() {
   const openerId = created ? String((created.payload as Record<string, unknown>).detection_id) : null;
 
   return (
-    <div className="grid gap-6 pt-6 pb-10">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-6 pt-6 pb-10">
       {back}
       <Header
         incident={incident}
@@ -110,7 +110,7 @@ export function IncidentDetailView() {
           ))}
         </ul>
       </section>
-      <section aria-labelledby="detections" className="grid gap-2">
+      <section aria-labelledby="detections" className="grid grid-cols-[minmax(0,1fr)] gap-2">
         <h2 id="detections" className="px-4 text-sm font-semibold md:px-6">
           Detections ({incident.detections.length})
         </h2>
@@ -120,7 +120,7 @@ export function IncidentDetailView() {
           ))}
         </ul>
       </section>
-      <section aria-labelledby="timeline" className="grid gap-2">
+      <section aria-labelledby="timeline" className="grid grid-cols-[minmax(0,1fr)] gap-2">
         <h2 id="timeline" className="px-4 text-sm font-semibold md:px-6">
           Timeline
         </h2>

@@ -105,7 +105,7 @@ export function Header({
 export function DetectionCard({ item, opener }: { item: IncidentDetection; opener: boolean }) {
   const d = item.detection;
   return (
-    <li className="grid gap-2 border-t border-rule px-4 py-3 md:px-6">
+    <li className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-2 border-t border-rule px-4 py-3 md:px-6">
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-sm font-medium">{RULE_LABEL[d.rule] ?? d.rule}</span>
         <SeverityPill severity={d.severity} />
@@ -114,7 +114,7 @@ export function DetectionCard({ item, opener }: { item: IncidentDetection; opene
           started {formatTime(d.started_at)} · fired {formatTime(d.fired_at)}
         </span>
       </div>
-      <p className="text-sm">{d.explanation}</p>
+      <p className="text-sm [overflow-wrap:anywhere]">{d.explanation}</p>
       <dl className="num flex flex-wrap gap-x-5 gap-y-1 text-xs text-muted-foreground">
         <div className="flex gap-1">
           <dt>{d.metric}</dt>

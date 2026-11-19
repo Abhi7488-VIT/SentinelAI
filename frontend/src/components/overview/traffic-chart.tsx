@@ -18,10 +18,17 @@ export interface MinuteRow {
   errors: number | null;
 }
 
-/** 60 one-minute slots ending at `generatedAt`'s minute; missing minutes are null. */
+/*
+ * Rollups are computed up to now - 30 s on a 15-s grid, so the newest minute (and, for up to 30 s,
+ * the one before) is still filling: plotting it would show a drop that is not real. The series
+ * ends at the last minute that closed at least 45 s before `generatedAt`.
+ */
+export const COMPLETE_LAG_MS = 45_000;
+
+/** `minutes` one-minute slots ending at the last complete minute; missing minutes are null. */
 export function fillMinutes(series: OverviewService["series"], generatedAt: string, minutes = 60): MinuteRow[] {
   const byMinute = new Map(series.map((p) => [Date.parse(p.minute), p]));
-  const end = Math.floor(Date.parse(generatedAt) / 60_000) * 60_000;
+  const end = Math.floor((Date.parse(generatedAt) - COMPLETE_LAG_MS) / 60_000) * 60_000 - 60_000;
   const rows: MinuteRow[] = [];
   for (let t = end - (minutes - 1) * 60_000; t <= end; t += 60_000) {
     const p = byMinute.get(t);

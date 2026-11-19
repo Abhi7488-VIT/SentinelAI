@@ -42,13 +42,15 @@ const overview = (o: Partial<Overview> = {}): Overview => ({
 });
 
 describe("fillMinutes", () => {
-  it("keeps 60 slots and leaves missing minutes as gaps, not zeros", () => {
+  it("keeps 60 slots, leaves missing minutes as gaps, and drops minutes still filling", () => {
+    // generated 21:30:20 → 21:30 (in progress) and 21:29 (closed only 20 s ago) are left out.
     const rows = fillMinutes(svc().series, GEN);
     expect(rows).toHaveLength(60);
-    expect(rows.at(-1)).toEqual({ minute: "21:30", requests: 590, errors: 120 });
-    expect(rows.at(-2)).toEqual({ minute: "21:29", requests: null, errors: null });
-    expect(rows.at(-3)?.requests).toBe(600);
-    expect(rows[0].minute).toBe("20:31");
+    expect(rows.at(-1)?.minute).toBe("21:28");
+    expect(rows.at(-1)?.requests).toBe(600);
+    expect(rows.at(-2)).toEqual({ minute: "21:27", requests: null, errors: null });
+    expect(rows[0].minute).toBe("20:29");
+    expect(fillMinutes(svc().series, "2026-11-19T21:31:50Z").at(-1)).toEqual({ minute: "21:30", requests: 590, errors: 120 });
   });
 });
 
@@ -63,8 +65,8 @@ describe("OverviewBody", () => {
     const panel = screen.getByText("order-service").closest("li");
     expect(panel?.textContent).toContain("Degraded");
     expect(panel?.textContent).toContain("telemetry 10 s ago");
-    expect(panel?.textContent).toContain("Requests, 60 min1,190");
-    expect(panel?.textContent).toContain("Errors120");
+    expect(panel?.textContent).toContain("Requests, 60 min600"); // 21:30 still filling, not counted
+    expect(panel?.textContent).toContain("Errors0");
     expect(panel?.textContent).toContain("12,345");
     expect(screen.getByText("Show as table")).toBeTruthy();
   });
