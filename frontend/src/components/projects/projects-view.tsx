@@ -79,7 +79,7 @@ export function ProjectsView() {
         hasMore={Boolean(query.hasNextPage)}
         loadingMore={query.isFetchingNextPage}
         onLoadMore={() => void query.fetchNextPage()}
-        hrefFor={(p) => `/orgs/${orgId}/projects/${p.id}/services`}
+        hrefFor={(p) => `/orgs/${orgId}/projects/${p.id}`}
       />
       {canCreate ? <CreateProjectDialog orgId={orgId} open={creating} onOpenChange={setCreating} /> : null}
     </div>
