@@ -1,0 +1,516 @@
+{
+  "schema_version": 1,
+  "kind": "run",
+  "id": "db-pool-exhaustion",
+  "number": 1,
+  "title": "DB connection-pool exhaustion in order-service",
+  "injected_fault": {
+    "trigger": "traffic mix with-weekly-reports",
+    "description": "An internal job starts calling order-service GET /internal/reports/sales?days=7 at a fixed, seeded rate. The report keeps its database connection checked out while it streams the week's orders and calls payment-service once per chunk, so concurrent reports hold most of order-service's 10-connection pool (overflow 0, 3 s checkout timeout). Normal requests then wait for a connection and time out.",
+    "stop": "traffic mix back to baseline (the report job stops)"
+  },
+  "root_cause": {
+    "category": "resource_exhaustion",
+    "service": "order-service",
+    "component": "database connection pool (orders DB, pool_size 10, max_overflow 0, timeout 3 s)",
+    "summary": "The weekly sales report holds a pooled DB connection for its whole run, including one payment-service call per 500-order chunk; a steady stream of reports keeps the pool exhausted, so other order-service requests time out waiting for a connection (503) and the errors propagate to api-gateway and frontend.",
+    "code_location": {
+      "path": "services/shop/order_service/main.py",
+      "symbol": "sales_report"
+    }
+  },
+  "expected_symptoms": [
+    {
+      "id": "order-pool-pending",
+      "signal": "metric",
+      "backend": "prometheus",
+      "description": "Requests queue for a connection: order-service pending checkouts > 0, sustained for 2 minutes.",
+      "query": "max(max_over_time(db_client_connection_pending_requests{service_name=\"order-service\"}[30s]))",
+      "condition": {
+        "op": ">",
+        "threshold": 0,
+        "min_points": 8
+      }
+    },
+    {
+      "id": "order-pool-saturated",
+      "signal": "metric",
+      "backend": "prometheus",
+      "description": "All 10 pool connections in use, sustained for 2 minutes.",
+      "query": "max(max_over_time(db_client_connection_count{service_name=\"order-service\", db_client_connection_state=\"used\"}[30s]))",
+      "condition": {
+        "op": ">=",
+        "threshold": 10,
+        "min_points": 8
+      }
+    },
+    {
+      "id": "order-pool-timeout-logs",
+      "signal": "log",
+      "backend": "loki",
+      "description": "order-service error logs: timed out waiting for a database connection from the pool.",
+      "query": "sum(count_over_time({service_name=\"order-service\"} |= \"Timed out waiting for a database connection\" [1m]))",
+      "condition": {
+        "op": ">",
+        "threshold": 0,
+        "min_points": 4
+      }
+    },
+    {
+      "id": "order-5xx-share",
+      "signal": "metric",
+      "backend": "prometheus",
+      "description": "More than 20% of order-service responses are 5xx, for at least 1 minute.",
+      "query": "(sum(rate(http_server_request_duration_seconds_count{service_name=\"order-service\", http_response_status_code=~\"5..\"}[1m])) or vector(0)) / sum(rate(http_server_request_duration_seconds_count{service_name=\"order-service\"}[1m]))",
+      "condition": {
+        "op": ">",
+        "threshold": 0.2,
+        "min_points": 4
+      }
+    },
+    {
+      "id": "frontend-5xx",
+      "signal": "metric",
+      "backend": "prometheus",
+      "description": "The errors reach users: frontend 5xx share above 5% for at least 1 minute.",
+      "query": "(sum(rate(http_server_request_duration_seconds_count{service_name=\"frontend\", http_response_status_code=~\"5..\"}[1m])) or vector(0)) / sum(rate(http_server_request_duration_seconds_count{service_name=\"frontend\"}[1m]))",
+      "condition": {
+        "op": ">",
+        "threshold": 0.05,
+        "min_points": 4
+      }
+    },
+    {
+      "id": "order-error-traces",
+      "signal": "trace",
+      "backend": "jaeger",
+      "description": "Traces with a 503 (pool timeout) server span in order-service. Matched on the HTTP status: the spans also carry error=true, but Jaeger 2.12's in-memory store does not search that derived tag (verified live).",
+      "query": {
+        "service": "order-service",
+        "tags": {
+          "http.response.status_code": "503"
+        }
+      },
+      "condition": {
+        "op": ">=",
+        "threshold": 5
+      }
+    },
+    {
+      "id": "gateway-error-traces",
+      "signal": "trace",
+      "backend": "jaeger",
+      "description": "The same failures in api-gateway, which answers 502 when order-service fails.",
+      "query": {
+        "service": "api-gateway",
+        "tags": {
+          "http.response.status_code": "502"
+        }
+      },
+      "condition": {
+        "op": ">=",
+        "threshold": 5
+      }
+    },
+    {
+      "id": "frontend-error-traces",
+      "signal": "trace",
+      "backend": "jaeger",
+      "description": "And in frontend, the user-facing edge (502).",
+      "query": {
+        "service": "frontend",
+        "tags": {
+          "http.response.status_code": "502"
+        }
+      },
+      "condition": {
+        "op": ">=",
+        "threshold": 5
+      }
+    },
+    {
+      "id": "payment-unaffected",
+      "signal": "metric",
+      "backend": "prometheus",
+      "description": "payment-service is not the cause: its 5xx share stays below 1% throughout.",
+      "query": "(sum(rate(http_server_request_duration_seconds_count{service_name=\"payment-service\", http_response_status_code=~\"5..\"}[1m])) or vector(0)) / sum(rate(http_server_request_duration_seconds_count{service_name=\"payment-service\"}[1m]))",
+      "condition": {
+        "op": "<",
+        "threshold": 0.01,
+        "min_fraction": 1.0
+      }
+    }
+  ],
+  "recovery_checks": [
+    {
+      "id": "order-pool-idle",
+      "signal": "metric",
+      "backend": "prometheus",
+      "description": "No sustained queueing for an order-service DB connection: the 1-minute average of pending requests stays below 1. A single request waiting while the lazily-grown pool opens a connection is not queueing (seen live under baseline traffic: one pending=1 sample in 50 minutes, with 1 of 10 connections in use).",
+      "query": "max(avg_over_time(db_client_connection_pending_requests{service_name=\"order-service\"}[1m]))",
+      "condition": {
+        "op": "<",
+        "threshold": 1,
+        "min_fraction": 1.0
+      }
+    },
+    {
+      "id": "order-5xx-low",
+      "signal": "metric",
+      "backend": "prometheus",
+      "description": "order-service 5xx share below 1%.",
+      "query": "(sum(rate(http_server_request_duration_seconds_count{service_name=\"order-service\", http_response_status_code=~\"5..\"}[1m])) or vector(0)) / sum(rate(http_server_request_duration_seconds_count{service_name=\"order-service\"}[1m]))",
+      "condition": {
+        "op": "<",
+        "threshold": 0.01,
+        "min_fraction": 1.0
+      }
+    },
+    {
+      "id": "frontend-5xx-low",
+      "signal": "metric",
+      "backend": "prometheus",
+      "description": "frontend 5xx share below 1%.",
+      "query": "(sum(rate(http_server_request_duration_seconds_count{service_name=\"frontend\", http_response_status_code=~\"5..\"}[1m])) or vector(0)) / sum(rate(http_server_request_duration_seconds_count{service_name=\"frontend\"}[1m]))",
+      "condition": {
+        "op": "<",
+        "threshold": 0.01,
+        "min_fraction": 1.0
+      }
+    }
+  ],
+  "expected_affected_services": [
+    "order-service",
+    "api-gateway",
+    "frontend"
+  ],
+  "unaffected_services": [
+    "payment-service",
+    "user-service"
+  ],
+  "timeline": {
+    "started_at": "2026-11-19T21:16:37+00:00",
+    "ended_at": "2026-11-19T21:21:37+00:00"
+  },
+  "run": {
+    "run_id": "20261119T211437Z-1eaa97",
+    "seed": 42,
+    "status": "verified",
+    "mode": "full",
+    "windows": {
+      "baseline_s": 120,
+      "observe_s": 300,
+      "recovery_s": 180
+    },
+    "baseline_started_at": "2026-11-19T21:14:37+00:00",
+    "recovery_ended_at": "2026-11-19T21:24:37+00:00",
+    "baseline_healthy": true,
+    "baseline_checks": [
+      {
+        "id": "order-pool-idle",
+        "observed": true,
+        "baseline": null,
+        "threshold": 1.0,
+        "points": 9,
+        "points_met": 9,
+        "peak": 0.0,
+        "onset_s": 0.0,
+        "detail": "9/9 points < 1 (needs >= 100% of points)",
+        "evidence": [
+          "001-prometheus.json"
+        ]
+      },
+      {
+        "id": "order-5xx-low",
+        "observed": true,
+        "baseline": null,
+        "threshold": 0.01,
+        "points": 9,
+        "points_met": 9,
+        "peak": 0.0,
+        "onset_s": 0.0,
+        "detail": "9/9 points < 0.01 (needs >= 100% of points)",
+        "evidence": [
+          "002-prometheus.json"
+        ]
+      },
+      {
+        "id": "frontend-5xx-low",
+        "observed": true,
+        "baseline": null,
+        "threshold": 0.01,
+        "points": 9,
+        "points_met": 9,
+        "peak": 0.0,
+        "onset_s": 0.0,
+        "detail": "9/9 points < 0.01 (needs >= 100% of points)",
+        "evidence": [
+          "003-prometheus.json"
+        ]
+      }
+    ],
+    "observed": [
+      {
+        "id": "order-pool-pending",
+        "observed": true,
+        "baseline": null,
+        "threshold": 0.0,
+        "points": 21,
+        "points_met": 20,
+        "peak": 46.0,
+        "onset_s": 15.0,
+        "detail": "20/21 points > 0 (needs >= 8 consecutive points)",
+        "evidence": [
+          "004-prometheus.json"
+        ]
+      },
+      {
+        "id": "order-pool-saturated",
+        "observed": true,
+        "baseline": null,
+        "threshold": 10.0,
+        "points": 21,
+        "points_met": 20,
+        "peak": 10.0,
+        "onset_s": 15.0,
+        "detail": "20/21 points >= 10 (needs >= 8 consecutive points)",
+        "evidence": [
+          "005-prometheus.json"
+        ]
+      },
+      {
+        "id": "order-pool-timeout-logs",
+        "observed": true,
+        "baseline": null,
+        "threshold": 0.0,
+        "points": 21,
+        "points_met": 21,
+        "peak": 512.0,
+        "onset_s": 7.8,
+        "detail": "21/21 points > 0 (needs >= 4 consecutive points)",
+        "evidence": [
+          "006-loki.json"
+        ]
+      },
+      {
+        "id": "order-5xx-share",
+        "observed": true,
+        "baseline": null,
+        "threshold": 0.2,
+        "points": 21,
+        "points_met": 19,
+        "peak": 0.8712916806728815,
+        "onset_s": 30.0,
+        "detail": "19/21 points > 0.2 (needs >= 4 consecutive points)",
+        "evidence": [
+          "007-prometheus.json"
+        ]
+      },
+      {
+        "id": "frontend-5xx",
+        "observed": true,
+        "baseline": null,
+        "threshold": 0.05,
+        "points": 21,
+        "points_met": 19,
+        "peak": 0.5354330708661418,
+        "onset_s": 30.0,
+        "detail": "19/21 points > 0.05 (needs >= 4 consecutive points)",
+        "evidence": [
+          "008-prometheus.json"
+        ]
+      },
+      {
+        "id": "order-error-traces",
+        "observed": true,
+        "baseline": null,
+        "threshold": 5.0,
+        "points": 50,
+        "points_met": 50,
+        "peak": 50.0,
+        "onset_s": 285.6,
+        "detail": "50 matching traces >= 5?",
+        "evidence": [
+          "009-jaeger.json"
+        ]
+      },
+      {
+        "id": "gateway-error-traces",
+        "observed": true,
+        "baseline": null,
+        "threshold": 5.0,
+        "points": 50,
+        "points_met": 50,
+        "peak": 50.0,
+        "onset_s": 285.1,
+        "detail": "50 matching traces >= 5?",
+        "evidence": [
+          "010-jaeger.json"
+        ]
+      },
+      {
+        "id": "frontend-error-traces",
+        "observed": true,
+        "baseline": null,
+        "threshold": 5.0,
+        "points": 50,
+        "points_met": 50,
+        "peak": 50.0,
+        "onset_s": 285.1,
+        "detail": "50 matching traces >= 5?",
+        "evidence": [
+          "011-jaeger.json"
+        ]
+      },
+      {
+        "id": "payment-unaffected",
+        "observed": true,
+        "baseline": null,
+        "threshold": 0.01,
+        "points": 21,
+        "points_met": 21,
+        "peak": 0.0,
+        "onset_s": 0.0,
+        "detail": "21/21 points < 0.01 (needs >= 100% of points)",
+        "evidence": [
+          "012-prometheus.json"
+        ]
+      }
+    ],
+    "recovery": [
+      {
+        "id": "order-pool-idle",
+        "observed": true,
+        "baseline": null,
+        "threshold": 1.0,
+        "points": 7,
+        "points_met": 7,
+        "peak": 0.0,
+        "onset_s": 0.0,
+        "detail": "7/7 points < 1 (needs >= 100% of points)",
+        "evidence": [
+          "013-prometheus.json"
+        ]
+      },
+      {
+        "id": "order-5xx-low",
+        "observed": true,
+        "baseline": null,
+        "threshold": 0.01,
+        "points": 7,
+        "points_met": 7,
+        "peak": 0.0,
+        "onset_s": 0.0,
+        "detail": "7/7 points < 0.01 (needs >= 100% of points)",
+        "evidence": [
+          "014-prometheus.json"
+        ]
+      },
+      {
+        "id": "frontend-5xx-low",
+        "observed": true,
+        "baseline": null,
+        "threshold": 0.01,
+        "points": 7,
+        "points_met": 7,
+        "peak": 0.0,
+        "onset_s": 0.0,
+        "detail": "7/7 points < 0.01 (needs >= 100% of points)",
+        "evidence": [
+          "015-prometheus.json"
+        ]
+      }
+    ],
+    "fingerprint": {
+      "symptoms": [
+        {
+          "id": "frontend-5xx",
+          "onset_bucket": 2,
+          "magnitude_bucket": 3
+        },
+        {
+          "id": "frontend-error-traces",
+          "onset_bucket": null,
+          "magnitude_bucket": 3
+        },
+        {
+          "id": "gateway-error-traces",
+          "onset_bucket": null,
+          "magnitude_bucket": 3
+        },
+        {
+          "id": "order-5xx-share",
+          "onset_bucket": 2,
+          "magnitude_bucket": 2
+        },
+        {
+          "id": "order-error-traces",
+          "onset_bucket": null,
+          "magnitude_bucket": 3
+        },
+        {
+          "id": "order-pool-pending",
+          "onset_bucket": 1,
+          "magnitude_bucket": null
+        },
+        {
+          "id": "order-pool-saturated",
+          "onset_bucket": 1,
+          "magnitude_bucket": 0
+        },
+        {
+          "id": "order-pool-timeout-logs",
+          "onset_bucket": 0,
+          "magnitude_bucket": null
+        },
+        {
+          "id": "payment-unaffected",
+          "onset_bucket": 0,
+          "magnitude_bucket": null
+        }
+      ]
+    },
+    "memory": {
+      "min_available_mb": 10106,
+      "abort_below_mb": 500
+    },
+    "reasons": [],
+    "steps": [
+      {
+        "at": "2026-11-19T21:14:37+00:00",
+        "step": "reset",
+        "detail": "scenario db-pool-exhaustion (full)"
+      },
+      {
+        "at": "2026-11-19T21:14:37+00:00",
+        "step": "traffic",
+        "detail": "mix=baseline seed=42"
+      },
+      {
+        "at": "2026-11-19T21:16:37+00:00",
+        "step": "baseline",
+        "detail": "healthy: order-pool-idle, order-5xx-low, frontend-5xx-low"
+      },
+      {
+        "at": "2026-11-19T21:16:37+00:00",
+        "step": "traffic",
+        "detail": "mix=with-weekly-reports seed=42"
+      },
+      {
+        "at": "2026-11-19T21:21:37+00:00",
+        "step": "observe",
+        "detail": "order-pool-pending=yes, order-pool-saturated=yes, order-pool-timeout-logs=yes, order-5xx-share=yes, frontend-5xx=yes, order-error-traces=yes, gateway-error-traces=yes, frontend-error-traces=yes, payment-unaffected=yes"
+      },
+      {
+        "at": "2026-11-19T21:21:37+00:00",
+        "step": "traffic",
+        "detail": "mix=baseline seed=42"
+      },
+      {
+        "at": "2026-11-19T21:24:37+00:00",
+        "step": "recovery",
+        "detail": "order-pool-idle=ok, order-5xx-low=ok, frontend-5xx-low=ok"
+      }
+    ]
+  }
+}

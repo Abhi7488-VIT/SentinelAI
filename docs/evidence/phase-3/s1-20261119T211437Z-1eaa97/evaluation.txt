@@ -1,0 +1,16 @@
+db-pool-exhaustion run 20261119T211437Z-1eaa97 (harness: verified): PASS
+  [ok  ] exactly_one_incident: expected 1, got 1
+  [ok  ] expected_services_affected: expected ['api-gateway', 'frontend', 'order-service'], got ['api-gateway', 'frontend', 'order-service']
+  [ok  ] unaffected_services_excluded: expected none of ['payment-service', 'user-service'], got []
+  [ok  ] grouping_is_structural: expected every joined detection has >= 1 reason, got {'7bf5a06c-df14-4104-a060-4f9e35c6f5ac': 4, 'a85273e8-1a4a-4610-abb2-acfeed81ef13': 4, 'cb9989fe-2669-452e-8759-39e5579157df': 4, 'fede57bf-09b3-4398-829f-ddc8f020604d': 3, '20af9c6c-57a0-4d23-9036-02ac93280231': 1, 'c6c4812d-fc0c-404f-a450-a2d19b7294fc': 3}
+  [ok  ] detected_during_fault: expected first detection fired before 2026-11-19T21:21:37+00:00, got 2026-11-19T21:17:45+00:00
+  [ok  ] explanations_readable: expected no problems, got {}
+  [ok  ] no_false_positives: expected 0, got 0
+  time_to_first_detection_s: 68.0
+  time_to_incident_s: 112.737045
+  incident_detected_after_fault_s: 68.0
+  detections_in_incident: 7
+  false_positive_detections: 0
+  other_incidents_during_run: 0
+  root_cause_service_has_detection: True
+written: /workspaces/SentinelAI/testbed/runs/db-pool-exhaustion/20261119T211437Z-1eaa97/sentinelai-evaluation.json

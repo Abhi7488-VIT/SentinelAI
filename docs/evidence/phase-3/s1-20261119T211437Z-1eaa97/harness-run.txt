@@ -1,0 +1,26 @@
+[controller] run 20261119T211437Z-1eaa97: db-pool-exhaustion seed=42 baseline=120s observe=300s recovery=180s
+[2026-11-19T21:14:37+00:00] reset: scenario db-pool-exhaustion (full)
+[2026-11-19T21:14:37+00:00] traffic: mix=baseline seed=42
+[2026-11-19T21:16:37+00:00] baseline: healthy: order-pool-idle, order-5xx-low, frontend-5xx-low
+[2026-11-19T21:16:37+00:00] traffic: mix=with-weekly-reports seed=42
+[2026-11-19T21:21:37+00:00] observe: order-pool-pending=yes, order-pool-saturated=yes, order-pool-timeout-logs=yes, order-5xx-share=yes, frontend-5xx=yes, order-error-traces=yes, gateway-error-traces=yes, frontend-error-traces=yes, payment-unaffected=yes
+[2026-11-19T21:21:37+00:00] traffic: mix=baseline seed=42
+[2026-11-19T21:24:37+00:00] recovery: order-pool-idle=ok, order-5xx-low=ok, frontend-5xx-low=ok
+scenario db-pool-exhaustion  run 20261119T211437Z-1eaa97  seed 42  -> VERIFIED
+  fault: 2026-11-19T21:16:37+00:00 -> 2026-11-19T21:21:37+00:00
+  baseline  ok  order-pool-idle                  peak=        0 onset=    0s  9/9 points < 1 (needs >= 100% of points)
+  baseline  ok  order-5xx-low                    peak=        0 onset=    0s  9/9 points < 0.01 (needs >= 100% of points)
+  baseline  ok  frontend-5xx-low                 peak=        0 onset=    0s  9/9 points < 0.01 (needs >= 100% of points)
+  symptoms  ok  order-pool-pending               peak=       46 onset=   15s  20/21 points > 0 (needs >= 8 consecutive points)
+  symptoms  ok  order-pool-saturated             peak=       10 onset=   15s  20/21 points >= 10 (needs >= 8 consecutive points)
+  symptoms  ok  order-pool-timeout-logs          peak=      512 onset=    8s  21/21 points > 0 (needs >= 4 consecutive points)
+  symptoms  ok  order-5xx-share                  peak=   0.8713 onset=   30s  19/21 points > 0.2 (needs >= 4 consecutive points)
+  symptoms  ok  frontend-5xx                     peak=   0.5354 onset=   30s  19/21 points > 0.05 (needs >= 4 consecutive points)
+  symptoms  ok  order-error-traces               peak=       50 onset=  286s  50 matching traces >= 5?
+  symptoms  ok  gateway-error-traces             peak=       50 onset=  285s  50 matching traces >= 5?
+  symptoms  ok  frontend-error-traces            peak=       50 onset=  285s  50 matching traces >= 5?
+  symptoms  ok  payment-unaffected               peak=        0 onset=    0s  21/21 points < 0.01 (needs >= 100% of points)
+  recovery  ok  order-pool-idle                  peak=        0 onset=    0s  7/7 points < 1 (needs >= 100% of points)
+  recovery  ok  order-5xx-low                    peak=        0 onset=    0s  7/7 points < 0.01 (needs >= 100% of points)
+  recovery  ok  frontend-5xx-low                 peak=        0 onset=    0s  7/7 points < 0.01 (needs >= 100% of points)
+exit=0
