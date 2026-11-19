@@ -21,6 +21,12 @@ EXPECTED_TABLES = {
     "services",
     "service_dependencies",
     "service_api_keys",
+    "spans",
+    "log_records",
+    "metric_series",
+    "metric_points",
+    "deployments",
+    "ingest_usage",
 }
 
 

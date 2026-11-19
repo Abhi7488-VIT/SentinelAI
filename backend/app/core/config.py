@@ -47,6 +47,13 @@ class Settings(BaseSettings):
     auth_rate_limit_attempts: int = Field(default=10, ge=1)
     auth_rate_limit_window_seconds: int = Field(default=60, ge=1)
 
+    # Telemetry storage (ADR 0005). Daily partitions; retention in whole days.
+    telemetry_retention_spans_days: int = Field(default=3, ge=1, le=90)
+    telemetry_retention_logs_days: int = Field(default=3, ge=1, le=90)
+    telemetry_retention_metrics_days: int = Field(default=7, ge=1, le=90)
+    telemetry_partition_days_ahead: int = Field(default=2, ge=1, le=14)
+    ingest_usage_retention_days: int = Field(default=30, ge=1, le=365)
+
     # HTTP
     cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:3000"])
 

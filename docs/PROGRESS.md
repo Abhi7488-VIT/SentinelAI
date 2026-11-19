@@ -10,7 +10,7 @@ Plan: `docs/plans/phase-3.md`, approved 2026-11-19 (D1–D6 as proposed). Work r
 | Task | Status |
 |---|---|
 | T1 Registry | done — see below |
-| T2 Telemetry storage | not started |
+| T2 Telemetry storage | done — see below |
 | T3 OTLP endpoint | not started |
 | T4 Ingest writer | not started |
 | T5 Testbed wiring (live) | not started |
@@ -40,6 +40,25 @@ Plan: `docs/plans/phase-3.md`, approved 2026-11-19 (D1–D6 as proposed). Work r
   rows per org), so the remaining filters were not given dedicated indexes.
 - Limitations: no project/service un-archive endpoint; the 10-active-keys limit is not race-proof
   under concurrent creates (soft limit); key `last_used_at` is written from T3 on.
+
+### T2 Telemetry storage (2026-11-19)
+- Migration `0003`: day-partitioned `spans`, `log_records`, `metric_points`; `metric_series`,
+  `deployments`, `ingest_usage`. Dedup primary keys (include the partition column), composite
+  tenant FKs to `services`/`metric_series`, id-length and enum CHECKs. ADR 0005 written.
+- `app.services.telemetry_maintenance`: keeps partitions `today-1 … today+2`, drops days older than
+  retention (spans/logs 3 d, metrics 7 d; usage rows 30 d), advisory-lock guarded. Runs from the
+  `migrate` container (`python -m app.cli.telemetry_maintenance`), from the new **`beat`** container
+  every 10 min (task `telemetry.maintain_partitions`), and from ingest start-up in T3.
+- Verified: 240 backend tests pass (11 new storage tests: window + idempotency, routing into the
+  day partition, re-insert dedup, out-of-window insert fails, per-table retention, lock skip, usage
+  retention, cross-tenant FK, id lengths, JIT off); `alembic check` clean; image built; `migrate`
+  container ran migrations + maintenance; worker executed the task from the image (0.14 s); beat
+  started. **Not yet observed:** beat's first scheduled fire (10-min interval).
+- EXPLAIN on 1M seeded spans / 300k logs / 72k points (`docs/evidence/phase-3/t2-explain.txt`): every
+  §3.2 query uses its intended index. Found: Postgres JIT made the graph query 733 ms vs 16.7 ms
+  without (rollup 9.0 → 0.9 ms) → `jit=off` on SentinelAI's connections (tested).
+- Plan deviation: the maintenance CLI lives in `app/cli/` (not `scripts/`), because
+  `backend/.dockerignore` keeps dev scripts out of the image.
 
 ## Phase 2 report (2026-11-17) — testbed
 
@@ -141,7 +160,7 @@ compose, tests), `.github/workflows/testbed-live.yml`, `.github/workflows/testbe
 |---|---|---|
 | 1. Foundation | **Complete, merged to main (2026-11-17)** | Plan: `docs/plans/phase-1.md`. |
 | 2. Testbed | **Complete, merged to main (PR #1)** | Plan: `docs/plans/phase-2.md`; ADR 0003 accepted; live verification moved to Codespaces/CI (ADR 0004, `docs/codespaces.md`). |
-| 3. Incident management | **In progress** — T1 done | Plan: `docs/plans/phase-3.md` (approved 2026-11-19). |
+| 3. Incident management | **In progress** — T1–T2 done | Plan: `docs/plans/phase-3.md` (approved 2026-11-19). |
 | 4. Investigation engine | Not started | |
 | 5. Recovery | Not started | |
 | 6. Hardening + evaluation | Not started | |

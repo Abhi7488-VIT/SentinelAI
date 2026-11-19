@@ -66,6 +66,9 @@ routes, failing closed. Details: ADR 0001.
 Phase 3 adds the service registry: `services` (per project; `name` = OTel `service.name`),
 `service_dependencies` (declared edges) and `service_api_keys` (per-service ingest keys, SHA-256 at
 rest). Projects and services are archived, never hard-deleted; archiving revokes ingest keys.
+Telemetry is stored in day-partitioned Postgres tables (`spans`, `log_records`, `metric_points`)
+with dedup primary keys and runtime-managed partitions/retention; a `beat` container schedules the
+maintenance job. Details and trade-offs: ADR 0005.
 Tenant-owned rows carry `org_id`; `projects` has `UNIQUE (org_id, id)` so later tables can use
 composite foreign keys that cannot cross tenants. The plan (`docs/plans/phase-1.md` §2.3) lists the
 tables expected in later phases.

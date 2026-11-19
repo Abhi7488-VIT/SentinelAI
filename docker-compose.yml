@@ -68,7 +68,8 @@ services:
   migrate:
     build: *backend-build
     image: sentinelai-backend:dev
-    command: ["alembic", "upgrade", "head"]
+    # Migrations, then create today's (and upcoming) telemetry partitions before anything ingests.
+    command: ["sh", "-c", "alembic upgrade head && python -m app.cli.telemetry_maintenance"]
     environment: *backend-env
     depends_on:
       postgres:
@@ -114,6 +115,19 @@ services:
       timeout: 20s
       retries: 3
       start_period: 30s
+    restart: unless-stopped
+
+  # Celery beat: periodic jobs (telemetry partition maintenance; Phase 3 adds detection ticks).
+  beat:
+    build: *backend-build
+    image: sentinelai-backend:dev
+    command: ["celery", "-A", "app.worker.celery_app", "beat", "--loglevel=INFO", "--schedule", "/tmp/celerybeat-schedule"]
+    environment: *backend-env
+    depends_on:
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     restart: unless-stopped
 
   frontend:

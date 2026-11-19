@@ -25,5 +25,13 @@ def configure_celery(app: Celery, settings: Settings) -> Celery:
         timezone="UTC",
         enable_utc=True,
         task_default_queue="default",
+        beat_schedule={
+            # Partitions are created days ahead, so a missed run or two is harmless.
+            "telemetry-maintain-partitions": {
+                "task": "telemetry.maintain_partitions",
+                "schedule": 600.0,
+                "options": {"expires": 540},
+            },
+        },
     )
     return app
