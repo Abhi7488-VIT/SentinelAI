@@ -27,6 +27,7 @@ EXPECTED_TABLES = {
     "metric_points",
     "deployments",
     "ingest_usage",
+    "ingest_batches",
 }
 
 

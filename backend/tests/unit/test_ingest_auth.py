@@ -110,3 +110,19 @@ def _revoked(r: KeyRecord, *, archived: bool = False) -> KeyRecord:
         revoked_at=None if archived else now,
         service_archived_at=now if archived else None,
     )
+
+
+async def test_database_down_is_503_not_500() -> None:
+    from sqlalchemy.exc import OperationalError
+
+    from app.ingest.queue import IngestUnavailableError
+
+    async def broken(_session: Any, _prefix: str) -> KeyRecord | None:
+        raise OperationalError("SELECT 1", {}, ConnectionRefusedError())
+
+    sm: Any = FakeSessionmaker()
+    resolver = KeyResolver(sm, ttl=10, clock=lambda: 0.0, lookup=broken)
+    with pytest.raises(IngestUnavailableError) as exc:
+        await resolver.resolve(f"Bearer {KEY.token}")
+    assert exc.value.status_code == 503
+    assert exc.value.headers == {"Retry-After": "5"}

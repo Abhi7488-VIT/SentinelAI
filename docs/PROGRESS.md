@@ -12,7 +12,7 @@ Plan: `docs/plans/phase-3.md`, approved 2026-11-19 (D1–D6 as proposed). Work r
 | T1 Registry | done — see below |
 | T2 Telemetry storage | done — see below |
 | T3 OTLP endpoint | done — see below |
-| T4 Ingest writer | not started |
+| T4 Ingest writer | done — see below |
 | T5 Testbed wiring (live) | not started |
 | T6 Dependency graph | not started |
 | T7 Detection | not started |
@@ -53,7 +53,8 @@ Plan: `docs/plans/phase-3.md`, approved 2026-11-19 (D1–D6 as proposed). Work r
   day partition, re-insert dedup, out-of-window insert fails, per-table retention, lock skip, usage
   retention, cross-tenant FK, id lengths, JIT off); `alembic check` clean; image built; `migrate`
   container ran migrations + maintenance; worker executed the task from the image (0.14 s); beat
-  started. **Not yet observed:** beat's first scheduled fire (10-min interval).
+  started. Beat's first scheduled fire observed later: `Sending due task telemetry-maintain-partitions`
+  at 11:13:53 UTC, worker succeeded.
 - EXPLAIN on 1M seeded spans / 300k logs / 72k points (`docs/evidence/phase-3/t2-explain.txt`): every
   §3.2 query uses its intended index. Found: Postgres JIT made the graph query 733 ms vs 16.7 ms
   without (rollup 9.0 → 0.9 ms) → `jit=off` on SentinelAI's connections (tested).
@@ -90,6 +91,28 @@ Plan: `docs/plans/phase-3.md`, approved 2026-11-19 (D1–D6 as proposed). Work r
 - Limitations: rejections are written to `ingest_usage` by the T4 writer (best effort for
   malformed requests when the queue is full; Prometheus counts always); no per-IP limit on failed
   auth (the ingest port binds to 127.0.0.1 / the compose network).
+
+### T4 Ingest writer (2026-11-19)
+- New **`ingest-writer`** container (Celery worker on the `ingest` queue only, `mem_limit 512m`),
+  per-process event loop + small pool. One transaction per batch: claim `batch_id` in
+  `ingest_batches` (migration `0005`; a redelivered message is skipped, so usage counts are exact),
+  `INSERT … ON CONFLICT DO NOTHING` for spans/logs/deployments/points (chunked under the bind
+  limit), metric cardinality guard (2,000 series/service → `series_limit`), per-minute
+  `ingest_usage` upsert, throttled `services.last_seen_at` / `service_api_keys.last_used_at`.
+- Failures: retry with exponential backoff + ±50% jitter (≤ 5 retries, cap 60 s), then a capped
+  Redis dead-letter list `ingest:dead` (1,000) + `ingest_dead_letters_total`; undecodable payloads
+  go straight to dead-letter.
+- `TenantRepository` now takes a `TenantScope` (`TenantContext` for users, `SystemScope` for
+  workers whose org comes from a verified key).
+- Fix found while planning the live check: DB down + uncached key returned 500 → now 503 +
+  Retry-After.
+- Verified: **312 backend tests pass** (writer: every signal + usage + bookkeeping, redelivered
+  batch has no effect, re-sent records in a new batch not duplicated, cardinality guard,
+  rejection-only usage, forged cross-tenant batch refused by FK, **end-to-end duplicate OTLP request
+  → 10 rows not 20 and malformed counted**, dead-letter cap; task retry/dead-letter policy).
+  **Live** (`docs/evidence/phase-3/t4-writer-live.md`): duplicate batch → no duplicates; Postgres
+  stopped 12.5 s → writer retried 4× and the batch landed (100/100 spans); uncached key with DB
+  down → 503.
 
 ## Phase 2 report (2026-11-17) — testbed
 
@@ -191,7 +214,7 @@ compose, tests), `.github/workflows/testbed-live.yml`, `.github/workflows/testbe
 |---|---|---|
 | 1. Foundation | **Complete, merged to main (2026-11-17)** | Plan: `docs/plans/phase-1.md`. |
 | 2. Testbed | **Complete, merged to main (PR #1)** | Plan: `docs/plans/phase-2.md`; ADR 0003 accepted; live verification moved to Codespaces/CI (ADR 0004, `docs/codespaces.md`). |
-| 3. Incident management | **In progress** — T1–T3 done | Plan: `docs/plans/phase-3.md` (approved 2026-11-19). |
+| 3. Incident management | **In progress** — T1–T4 done | Plan: `docs/plans/phase-3.md` (approved 2026-11-19). |
 | 4. Investigation engine | Not started | |
 | 5. Recovery | Not started | |
 | 6. Hardening + evaluation | Not started | |

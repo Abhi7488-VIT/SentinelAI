@@ -36,3 +36,13 @@ INGEST_QUEUE_PENDING = Gauge(
     "ingest_queue_pending",
     "Batches waiting in the ingest queue (sampled on each enqueue).",
 )
+INGEST_ROWS_WRITTEN = Counter(
+    "ingest_rows_written_total",
+    "Telemetry rows inserted by the ingest writer (duplicates excluded), by table.",
+    ["table"],
+)
+INGEST_DEAD_LETTERS = Counter(
+    "ingest_dead_letters_total",
+    "Ingest batches moved to the dead-letter list after exhausting retries, by reason.",
+    ["reason"],
+)

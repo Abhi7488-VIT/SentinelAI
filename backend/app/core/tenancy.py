@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
+from typing import Protocol
 
 from app.models.organization import Role
 
@@ -19,6 +20,25 @@ class TenantContext:
     org_id: uuid.UUID
     user_id: uuid.UUID
     role: Role
+
+
+class TenantScope(Protocol):
+    """What a tenant-scoped repository needs: the org every query is filtered by."""
+
+    @property
+    def org_id(self) -> uuid.UUID: ...
+
+
+@dataclass(frozen=True, slots=True)
+class SystemScope:
+    """Tenant scope for background work with no user (ingest writer, detection jobs).
+
+    Only built from an org id that was itself derived from trusted state — e.g. a batch whose org
+    came from a verified ingest key — never from client input.
+    """
+
+    org_id: uuid.UUID
+    actor: str
 
 
 def can_assign_role(actor: Role, target_current: Role | None, target_new: Role | None) -> bool:

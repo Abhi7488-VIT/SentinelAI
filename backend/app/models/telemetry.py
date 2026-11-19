@@ -316,3 +316,21 @@ class IngestUsage(Base):
     minute: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     outcome: Mapped[str] = mapped_column(String(64), nullable=False)
     count: Mapped[int] = mapped_column(BigInteger, nullable=False)
+
+
+class IngestBatch(Base):
+    """Batches already written. Recorded in the writer's transaction, so a redelivered queue
+    message is skipped entirely (exactly-once effects, including `ingest_usage` counts)."""
+
+    __tablename__ = "ingest_batches"
+    __table_args__ = (Index("ix_ingest_batches_processed_at", "processed_at"),)
+
+    batch_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    org_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("organizations.id", ondelete="CASCADE", name="fk_ingest_batches_org"),
+        nullable=False,
+    )
+    processed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )

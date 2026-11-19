@@ -127,6 +127,9 @@ class IngestService:
         except InvalidIngestKeyError:
             INGEST_REQUESTS.labels(signal, "unauthorized").inc()
             raise
+        except IngestUnavailableError:
+            INGEST_REQUESTS.labels(signal, "unavailable").inc()
+            raise
         try:
             return await self._ingest(signal, principal, content_type, content_encoding, body)
         except RateLimitedError:

@@ -65,6 +65,9 @@ class Settings(BaseSettings):
     ingest_key_cache_seconds: float = Field(default=10.0, ge=0, le=60)
     ingest_queue_max_pending: int = Field(default=100, ge=1)
     ingest_queue_max_message_bytes: int = Field(default=2 * 1024 * 1024, ge=1024)
+    # Writer: metric cardinality guard and capped dead-letter list.
+    ingest_max_series_per_service: int = Field(default=2000, ge=1)
+    ingest_dead_letter_max: int = Field(default=1000, ge=1)
 
     # HTTP
     cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:3000"])

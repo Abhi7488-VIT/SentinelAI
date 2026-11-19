@@ -7,6 +7,7 @@ from app.models.refresh_token import RefreshToken
 from app.models.service import HealthStatus, Service, ServiceApiKey, ServiceDependency
 from app.models.telemetry import (
     Deployment,
+    IngestBatch,
     IngestUsage,
     LogRecord,
     MetricPoint,
@@ -19,6 +20,7 @@ __all__ = [
     "AuditLog",
     "Deployment",
     "HealthStatus",
+    "IngestBatch",
     "IngestUsage",
     "LogRecord",
     "MetricPoint",

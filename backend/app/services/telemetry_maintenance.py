@@ -22,6 +22,7 @@ from app.models.telemetry import PARTITIONED_TABLES
 from app.repositories import telemetry_partitions as parts
 
 logger = get_logger("app.telemetry.maintenance")
+BATCH_ID_RETENTION = timedelta(days=2)
 
 
 @dataclass(frozen=True, slots=True)
@@ -30,6 +31,7 @@ class MaintenanceResult:
     created: list[str] = field(default_factory=list)
     dropped: list[str] = field(default_factory=list)
     usage_rows_deleted: int = 0
+    batch_ids_deleted: int = 0
 
 
 def retention_days(settings: Settings) -> dict[str, int]:
@@ -71,13 +73,20 @@ async def run_maintenance(
     usage_deleted = await parts.delete_usage_before(
         session, now - timedelta(days=settings.ingest_usage_retention_days)
     )
+    # Processed-batch ids only need to outlive any queue redelivery (hours); keep two days.
+    batches_deleted = await parts.delete_batches_before(session, now - BATCH_ID_RETENTION)
     await session.commit()
     logger.info(
         "telemetry_maintenance_done",
         created=created,
         dropped=dropped,
         usage_rows_deleted=usage_deleted,
+        batch_ids_deleted=batches_deleted,
     )
     return MaintenanceResult(
-        ran=True, created=created, dropped=dropped, usage_rows_deleted=usage_deleted
+        ran=True,
+        created=created,
+        dropped=dropped,
+        usage_rows_deleted=usage_deleted,
+        batch_ids_deleted=batches_deleted,
     )

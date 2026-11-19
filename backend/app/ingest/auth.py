@@ -10,11 +10,13 @@ from __future__ import annotations
 import time
 from collections.abc import Awaitable, Callable
 
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.errors import AppError
 from app.core.security.api_keys import parse_key, verify_key
 from app.ingest.principal import IngestPrincipal
+from app.ingest.queue import IngestUnavailableError
 from app.repositories.ingest_keys import KeyRecord, find_key_by_prefix
 
 _MAX_CACHE_ENTRIES = 10_000
@@ -74,8 +76,12 @@ class KeyResolver:
         cached = self._cache.get(prefix)
         if cached is not None and cached[0] > now:
             return cached[1]
-        async with self._sessionmaker() as session:
-            record = await self._lookup(session, prefix)
+        try:
+            async with self._sessionmaker() as session:
+                record = await self._lookup(session, prefix)
+        except (SQLAlchemyError, OSError) as exc:
+            # The database is unreachable: a retryable 503, not a 500 (senders back off).
+            raise IngestUnavailableError("Key lookup unavailable.") from exc
         if len(self._cache) >= _MAX_CACHE_ENTRIES:
             self._cache.clear()  # bounded memory; a full reset is rare and only costs lookups
         self._cache[prefix] = (now + self._ttl, record)

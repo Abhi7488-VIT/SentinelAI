@@ -94,6 +94,8 @@ class DeploymentRow:
 
 @dataclass(slots=True)
 class NormalizedBatch:
+    """`batch_id` makes processing exactly-once: the writer records it in the same transaction."""
+
     org_id: uuid.UUID
     service_id: uuid.UUID
     key_id: uuid.UUID
@@ -105,6 +107,7 @@ class NormalizedBatch:
     deployments: list[DeploymentRow] = field(default_factory=list)
     # Records dropped during validation, by reason (the "counted" in "counted and dropped").
     rejected: dict[str, int] = field(default_factory=dict)
+    batch_id: uuid.UUID = field(default_factory=uuid.uuid4)
 
     @property
     def accepted(self) -> int:
@@ -157,4 +160,5 @@ def decode_batch(payload: str) -> NormalizedBatch:
         metrics=[_row(MetricRow, r) for r in doc["metrics"]],
         deployments=[_row(DeploymentRow, r) for r in doc["deployments"]],
         rejected=dict(doc["rejected"]),
+        batch_id=uuid.UUID(doc["batch_id"]),
     )

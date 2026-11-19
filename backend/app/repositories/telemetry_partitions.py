@@ -14,7 +14,7 @@ from datetime import UTC, date, datetime, time, timedelta
 from sqlalchemy import delete, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.telemetry import PARTITIONED_TABLES, IngestUsage
+from app.models.telemetry import PARTITIONED_TABLES, IngestBatch, IngestUsage
 
 # Arbitrary constant: the maintenance job's transaction-scoped advisory lock id.
 MAINTENANCE_LOCK_ID = 0x5E471_0001
@@ -91,4 +91,9 @@ async def drop_partition(session: AsyncSession, partition: Partition) -> None:
 
 async def delete_usage_before(session: AsyncSession, cutoff: datetime) -> int:
     result = await session.execute(delete(IngestUsage).where(IngestUsage.minute < cutoff))
+    return int(getattr(result, "rowcount", 0) or 0)
+
+
+async def delete_batches_before(session: AsyncSession, cutoff: datetime) -> int:
+    result = await session.execute(delete(IngestBatch).where(IngestBatch.processed_at < cutoff))
     return int(getattr(result, "rowcount", 0) or 0)
