@@ -1,6 +1,17 @@
-# Phase 4 — Investigation engine (plan, revision 0)
+# Phase 4 — Investigation engine (plan, revision 1)
 
-Status: **DRAFT — awaiting approval. No code is written before approval.**
+Status: **APPROVED 2026-11-20** (revision 1): D1–D9 as proposed, with these changes from the review:
+
+- **A1 — model:** `LLM_MODEL` default is **`claude-sonnet-5-5`** for development and testing.
+  `claude-opus-5-5` is used only for the final evaluation runs (T10), by changing the setting.
+  Development budget per investigation is **$1.00** (`INVESTIGATION_BUDGET_USD`, D3).
+- **A2 — D5:** add a test proving that a user from another org cannot read an investigation's data
+  or its checkpoint through **any** endpoint (T8).
+- **A3 — D9:** the harness (outside `backend/`, ADR 0003) also reports, **for information only**,
+  whether each investigation's top cause matches ground truth. It does not gate the phase, and the
+  backend never sees ground truth (T10).
+- **A4 — API key:** `ANTHROPIC_API_KEY` comes from the environment only. It is never committed, never
+  logged, and never appears in events, reports, `llm_calls` or error bodies (tests in T1 and T7).
 Scope: LLM provider interface, evidence store, LangGraph investigation workflow with persisted
 checkpoints, hypotheses and verification, controls (budgets, cancel, resume, dead-letter),
 prompt-injection defence, SSE progress, report generation and the Investigation Workspace UI.
@@ -143,7 +154,7 @@ class LLMProvider(Protocol):
   - All tests and CI use it. No network, no key.
 - **`AnthropicProvider`:**
   - Official `anthropic` SDK, async client, key from `ANTHROPIC_API_KEY` (env only; never logged — the settings field is `SecretStr`).
-  - Model from `LLM_MODEL` (default `claude-opus-5-5`, D2) and effort from `LLM_EFFORT` (default `medium`). Thinking is left to the model default; Opus 5.5 cannot disable it.
+  - Model from `LLM_MODEL` (default `claude-sonnet-5-5`, A1; `claude-opus-5-5` for final evaluation runs) and effort from `LLM_EFFORT` (default `medium`). Thinking is left to the model default; Opus 5.5 cannot disable it.
   - Refusal handling via the server-side `fallbacks` parameter (`"default"`), which this model supports. A final `refusal` is recorded as such; no fallback text is invented.
   - Selected by `LLM_PROVIDER=anthropic|fake`. If `anthropic` is selected without a key, the worker refuses to start investigations and the API reports them `failed: llm_not_configured`.
 
@@ -289,7 +300,7 @@ Per investigation; defaults below, each configurable and recorded on the row:
 | Wall-clock | 10 min | |
 | Tool calls | 60 | |
 | LLM calls | 15 | |
-| Cost (real provider) | $2.00 | |
+| Cost (real provider) | $1.00 during development (A1) | |
 
 How budgets are enforced:
 - They are checked **before** every node and every LLM call. A call that would exceed a budget is not made.
