@@ -2,7 +2,7 @@
 
 Read at the start of every session. Updated at the end of each phase.
 
-## Phase 3 — in progress (branch `phase-3-incident-management`)
+## Phase 3 — complete on branch `phase-3-incident-management`, awaiting review (not merged)
 
 Plan: `docs/plans/phase-3.md`, approved 2026-11-19 (D1–D6 as proposed). Work runs in the Codespace
 (4 cores, 15 GiB); SentinelAI's Postgres/Redis run next to the testbed.
@@ -17,9 +17,102 @@ Plan: `docs/plans/phase-3.md`, approved 2026-11-19 (D1–D6 as proposed). Work r
 | T6 Dependency graph | done — see below |
 | T7 Detection | done — see below |
 | T8 Correlation + incidents | done — see below (grouping verified in tests; live S1 is T10) |
-| T9 UI | not started |
-| T10 Live acceptance + benchmarks | in progress — quiet baseline ×2 clean; **S1 PASS** (run `20261119T211437Z-1eaa97`, evaluator `afcafd7`); earlier FAIL runs kept; benchmarks not yet run |
-| T11 Docs + report | not started |
+| T9 UI | done — see below (backend APIs, 5 pages, Vitest, Playwright incident path green on the live stack) |
+| T10 Live acceptance + benchmarks | done — quiet baseline ×2 clean; **S1 PASS** (`20261119T211437Z-1eaa97`); benchmarks in `docs/evidence/phase-3/bench/` |
+| T11 Docs + report | done — README, `docs/architecture/incident-pipeline.md`, overview/frontend docs, this report |
+
+## Phase 3 report (2026-11-20) — incident management
+
+All work ran in the Codespace (4 cores, 15.6 GiB). Branch `phase-3-incident-management`, 29 commits
+ahead of `main` (incl. this report), pushed; **not merged, no PR opened**. Phase 4 not started.
+
+### Implemented
+- **T1** service registry, per-service ingest keys (shown once, SHA-256 at rest), project/service
+  archive. **T2** day-partitioned telemetry storage, retention, `beat`. **T3** separate OTLP/HTTP
+  ingest process with size/rate/record limits, partial success, bounded queue. **T4** idempotent
+  writer with retries and dead-letter. **T5** testbed Collector → SentinelAI, live.
+  **T6** dependency graph (declared + observed, evidence-bound). **T7** deterministic detection
+  (5 rules, state machine, templated explanations). **T8** correlation into incidents with
+  structural reasons, incident APIs and timeline.
+- **T9** overview and ingest-usage APIs; UI: project Overview (Recharts), Services + keys, Service
+  map (React Flow, own deterministic layout), Incidents list (URL filters) and detail (transitions,
+  explanations, grouping reasons, timeline); Playwright incident golden path.
+- **T10** quiet baseline ×2, S1 live acceptance with a harness-side evaluator, local benchmarks.
+- **T11** docs (below) and this report.
+
+### Acceptance criteria (plan §12) — what was run
+| Criterion | Result | Proof |
+|---|---|---|
+| S1 → one incident, correct services, correlated detections, readable explanation | **PASS** on run `20261119T211437Z-1eaa97`: 1 incident, api-gateway/frontend/order-service, payment- and user-service excluded, 7 detections, 6 joiners each with ≥ 1 structural reason, 0 false positives, first detection 68 s / incident 112.7 s after fault start. Earlier runs: `e076ed` FAIL (SentinelAI timestamp bug, fixed `0a9b73b`), `335bba` FAIL under the original evaluator (evaluator opener bug, fixed `afcafd7`; re-score PASS, original output kept) | `docs/evidence/phase-3/s1-*/` |
+| Quiet baseline 10 min → 0 incidents | **PASS ×2**: 0 detections, 0 incidents, no rule entered `pending` (before and after the `0a9b73b` fix) | `t10-quiet-baseline.md`, `t10-baseline-20261119T1848Z/` |
+| Duplicate batch → no duplicates | **PASS**: integration tests (same request twice → 10 rows not 20; redelivered batch no-op) + live re-POST (T4); benchmark: rows = accepted at every level | `t4-writer-live.md`, `bench/` |
+| Malformed → 4xx and counted | **PASS**: tests + live: 400 `malformed_payload`, partial success rejected 3/10, both in `ingest_records_total` and `GET …/ingest-usage` | `bench/README.md` |
+| Overload → 429, not OOM | **PASS**: live flood 6,091 requests → 429/503 only, ingest peak 126.7 of 384 MiB, no restart (T3); benchmark peak 128.6 MiB | `t3-overload.md`, `bench/` |
+| Cross-org isolation on every new endpoint | **PASS**: OpenAPI-driven guard calls all **31** org-scoped operations as a non-member → 404; explicit foreign-object-id tests for services, keys, detections, incidents (detail/events/transitions), graph, overview, ingest-usage; foreign ids as list filters return nothing (mutation-checked) | `test_tenant_isolation.py`, `test_correlation.py`, `test_overview.py`, `test_detection.py`, `test_service_graph.py` |
+| Measured numbers | `GET /incidents` on 50k: p95 20–32 ms per filter (no-match title search p95 93.6 ms); ingest 1,896–2,370 records/s until written, writer-bound | `bench/README.md` (labelled: this Codespace, 2026-11-20, `701056e`) |
+
+### Tests (run at the final commit of the code, this machine)
+- Backend: ruff format + check clean, mypy strict clean (172 files), `alembic check` clean,
+  **409 passed** (160 at the start of Phase 3).
+- Frontend: lint, typecheck, **33 Vitest tests** (8 files), `next build` pass; OpenAPI types in sync.
+- Playwright (live stack): **2 passed** (Phase 1 path + Phase 3 incident path), green on 4 runs.
+- Testbed/harness: **145 passed**, 5 deselected (live-stack tests; covered by the runs above).
+
+### Not verified / known limitations
+- **CI has not run any of Phase 3 on GitHub**: `ci.yml` runs on pull requests and pushes to `main`
+  only, and no PR is open. The new e2e spec needs `ingest`, `ingest-writer` and `beat` up in the CI
+  compose stack; they are in `docker-compose.yml`, but this is untested on a runner.
+- Only scenario S1 was run against SentinelAI (plan scope: golden path first). S2–S5 are not
+  evaluated; detection of slow SQL, failed deploys, an unreachable dependency and a memory leak is
+  untested live.
+- One S1 run at one seed passes: a working golden path, not a detection rate. One baseline window
+  at one traffic mix: no false positive seen, not a false-positive rate.
+- The writer (~2k records/s here) is the ingest ceiling; one sender fills the queue.
+- Observed `redis:redis` vs declared `redis:sessions` (Redis spans carry no `db.namespace`).
+- Correlation and detection run in one transaction per tick for all orgs (fine at this scale).
+- A user resolving an incident in the same instant a tick links a detection is not serialized.
+- 10-active-keys limit is a soft limit under concurrent creates; no un-archive endpoint.
+- UI: light theme only, Overview caps at 50 services, map layout without crossing minimisation,
+  polling (SSE is Phase 4), no trace viewer for sample trace ids.
+- Worker processes expose no Prometheus endpoint (structured logs only).
+- Ingest has no per-IP limit on failed auth (port bound to 127.0.0.1 / compose network).
+- Slow no-match title search (p95 93.6 ms on 50k) is not analysed with `EXPLAIN` yet.
+
+### Decisions (and why); plan deviations
+- D1–D6 as approved. Deviations, each recorded in its task section: maintenance CLI in `app/cli/`
+  (Docker image excludes `scripts/`); ingest queue bound as max pending batches + max batch size
+  instead of a byte counter (cannot drift if a writer dies); `deploy_proximity` uses deploy_change
+  links, not "any incident service" (would merge on timing alone); graph node counts and
+  `GET /overview` moved to T9; overload measured with `scripts/ingest_overload.py` (T3) rather than
+  `bench_ingest.py`, which measures sustained throughput instead.
+- `jit=off` on SentinelAI's connections (JIT made the graph query 733 ms vs 16.7 ms).
+- Detection rules evaluate everything as of `eval_end` (fix after S1 `e076ed`); no threshold was
+  changed at any point in Phase 3.
+- The harness evaluator identifies an incident's opener from its `created` event (fix after
+  `335bba`); pass rule unchanged, original FAIL output kept.
+- UI dependencies `recharts` 3.10.1, `@xyflow/react` 12.12.1, pinned exact, chosen over releases
+  younger than two weeks. React Flow attribution kept.
+- Removed Phase 1's static "No telemetry yet" project label (false once ingestion exists).
+- Chart series stop at the last complete minute (rollups run 30 s behind; avoids a false drop).
+
+### Files changed this phase (summary)
+`git diff --shortstat origin/main...HEAD`: 261 files, +46,411 / −1,414 (≈ half is committed
+evidence). Backend: `app/{api,services,repositories,models,schemas,detection,ingest,cli}`,
+migrations `0002`–`0008`, `scripts/{connect_testbed,ingest_overload,bench_incidents,bench_ingest}.py`,
+tests. Frontend: `src/components/{common,project,services,incidents,overview,service-map}`, new
+routes under `src/app/(app)/orgs/[orgId]/`, `e2e/incident-path.spec.ts`. Compose: `ingest`,
+`ingest-writer`, `beat`. Testbed: SentinelAI overlay, registry file, `harness.evaluate`. Docs:
+README, `docs/architecture/{overview,incident-pipeline,frontend}.md`, ADRs 0005–0006,
+`docs/evidence/phase-3/`, this file.
+
+### Remaining / next
+- Your review; then a PR to `main` so CI (including the new e2e job) runs on GitHub for the first
+  time — fix anything it finds before merging.
+- Open item carried from Phase 2: commit author emails are personal; hiding them needs a history
+  rewrite. Not decided.
+- Candidates for later (not started): S2–S5 against SentinelAI, `EXPLAIN` of the no-match search,
+  writer throughput if real load needs it.
+- **Stop here; Phase 4 waits for your go-ahead.**
 
 ### T1 Registry (2026-11-19)
 - Migration `0002`: `services`, `service_dependencies`, `service_api_keys`; `projects.archived_at`.
@@ -280,6 +373,47 @@ Plan: `docs/plans/phase-3.md`, approved 2026-11-19 (D1–D6 as proposed). Work r
   and incident 112.7 s after fault start. One run at one seed: shows the golden path works on this
   run, not a detection rate. Evidence: `docs/evidence/phase-3/s1-20261119T211437Z-1eaa97/`.
 
+### T10 (part 4) Benchmarks (2026-11-20)
+- See the Phase 3 report above and `docs/evidence/phase-3/bench/README.md` (incl. the failed
+  script runs before the recorded ones).
+
+### T9 UI (2026-11-19/20)
+- Backend (`856642d`): `GET /overview?project_id` (open incidents by severity, newest 5,
+  detections in 24 h by rule, per active service health / last seen / ingest accepted+rejected in
+  15 min / requests+errors per minute over 60 min from the rollups) and
+  `GET /services/{id}/ingest-usage` (per-minute accepted/rejected by signal and reason, summed over
+  keys, keyset-paged, default 1 h, max 24 h → 422 `invalid_time_range`). 8 integration tests;
+  EXPLAIN on live data (`docs/evidence/phase-3/t9-overview-explain.txt`): with seqscan off every
+  query uses an org-prefixed index; tables are small, so seq scans are chosen by default.
+- Isolation (`303ec77`): Org A's service/project ids passed as **filters** to Org B's incidents,
+  detections and detector-states lists return an empty page (same as an unknown id); the graph of
+  Org A's project is 404. Mutation-checked (removing the org filter in `TenantRepository` makes it
+  fail). The OpenAPI-driven guard now calls **31** org-scoped operations as a non-member, all 404
+  (the `856642d` commit message says 29; 31 is the count from `openapi.json`).
+- UI (`9dcc98e`, `4256648`, `ee79055`, `53eee63`): project frame with Overview / Services / Service
+  map tabs; Services + ingest keys (key shown once); Incidents list with URL-synced filters and
+  detail with transitions, explanations, grouping reasons, timeline; Overview with Recharts;
+  service map with React Flow over a deterministic layout written here. Dependencies: `recharts`
+  3.10.1 and `@xyflow/react` 12.12.1 (plan §10), exact pins, chosen over releases < 2 weeks old;
+  `npm audit --omit=dev` 0 vulnerabilities.
+- Fixed on the way: the Projects list still said "No telemetry yet" for every project (Phase 1's
+  honest placeholder, false since ingestion exists) — removed; status now only comes from the API.
+- Found by looking at the pages over the testbed's real data (`701056e`): every chart ended in a
+  false drop (the newest minute is still filling; now not plotted), the overview was 537 px wide at
+  a 390 px viewport (fixed; all six pages measured scrollWidth 390), edge table order.
+- E2E (`701056e`): `e2e/incident-path.spec.ts` on the live stack — project → service → key →
+  3 min of backdated failing spans through the public ingest API → incident "Errors in
+  checkout-api" appears by itself → detail (opener, timeline) → "Start investigating" recorded →
+  overview and map show the service. **2/2 Playwright tests green on 4 runs here** (incident path
+  1.3–1.4 min); a probe script measured the incident 75.3 s after the POST. The Phase 1 spec was
+  updated for the removed placeholder text. **CI's e2e job runs on pull requests only: not run on
+  GitHub yet.**
+- Checks at `701056e`: frontend typecheck, lint, **33 Vitest tests**, `next build` pass; backend
+  ruff + mypy strict clean, **409 tests pass**.
+- Limitations: no dark theme; the Overview caps at 50 services (`services_truncated`); the map's
+  layout is plain layering (no crossing minimisation); polling every 15 s until SSE (Phase 4);
+  incident detail does not link sample trace ids to a trace viewer (none in SentinelAI yet).
+
 ## Phase 2 report (2026-11-17) — testbed
 
 All live work ran in the Codespace (4 cores, 16 GB; ADR 0004). Branch `phase-2-testbed`; Phase 3 not
@@ -380,7 +514,7 @@ compose, tests), `.github/workflows/testbed-live.yml`, `.github/workflows/testbe
 |---|---|---|
 | 1. Foundation | **Complete, merged to main (2026-11-17)** | Plan: `docs/plans/phase-1.md`. |
 | 2. Testbed | **Complete, merged to main (PR #1)** | Plan: `docs/plans/phase-2.md`; ADR 0003 accepted; live verification moved to Codespaces/CI (ADR 0004, `docs/codespaces.md`). |
-| 3. Incident management | **In progress** — T1–T5 done | Plan: `docs/plans/phase-3.md` (approved 2026-11-19). |
+| 3. Incident management | **Complete on branch, awaiting review** (2026-11-20) | Plan: `docs/plans/phase-3.md` (approved 2026-11-19); report below. |
 | 4. Investigation engine | Not started | |
 | 5. Recovery | Not started | |
 | 6. Hardening + evaluation | Not started | |

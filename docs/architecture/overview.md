@@ -1,7 +1,9 @@
-# Architecture overview (as of Phase 1)
+# Architecture overview (as of Phase 3)
 
-SentinelAI is a **modular monolith**: one FastAPI application with internal modules, plus a Celery
-worker process built from the same code. PostgreSQL is the system of record; Redis is the Celery
+SentinelAI is a **modular monolith**: one FastAPI application with internal modules, plus worker
+processes built from the same code (Celery `worker`, `ingest-writer`, `beat`, and the separate OTLP
+`ingest` HTTP process). The telemetry → incident flow is described in
+[incident-pipeline.md](incident-pipeline.md). PostgreSQL is the system of record; Redis is the Celery
 broker/result backend and the rate-limit store. The Next.js frontend talks to the API over REST.
 
 ```mermaid
@@ -19,6 +21,11 @@ flowchart LR
   W -- "consume / results" --> R
   W --> PG
   M[migrate<br/>alembic upgrade head] --> PG
+  O[OTLP senders] -- "OTLP/HTTP + ingest key" --> IN[ingest :8001]
+  IN -- "bounded queue" --> R
+  IW[ingest-writer] --> R
+  IW --> PG
+  BT[beat: detection 15 s,<br/>graph 60 s, partitions 10 min] --> R
 ```
 
 ## Backend layers
@@ -60,7 +67,7 @@ in an httpOnly `SameSite=Strict` cookie scoped to `/api/v1/auth`, stored as a SH
 reuse detection that revokes the whole login family. Argon2id passwords. Redis rate limits on auth
 routes, failing closed. Details: ADR 0001.
 
-## Data model (Phase 1)
+## Data model
 
 `users`, `organizations`, `organization_members`, `projects`, `refresh_tokens`, `audit_logs`.
 Phase 3 adds the service registry: `services` (per project; `name` = OTel `service.name`),
@@ -69,6 +76,9 @@ rest). Projects and services are archived, never hard-deleted; archiving revokes
 Telemetry is stored in day-partitioned Postgres tables (`spans`, `log_records`, `metric_points`)
 with dedup primary keys and runtime-managed partitions/retention; a `beat` container schedules the
 maintenance job. Details and trade-offs: ADR 0005.
+Phase 3 also adds `ingest_batches`, `ingest_usage`, `metric_series`, `deployments`,
+`service_edges`, `service_window_stats`, `service_instances`, `detector_states`, `detections`,
+`incidents`, `incident_detections`, `incident_services` and `incident_events`.
 Tenant-owned rows carry `org_id`; `projects` has `UNIQUE (org_id, id)` so later tables can use
 composite foreign keys that cannot cross tenants. The plan (`docs/plans/phase-1.md` §2.3) lists the
 tables expected in later phases.
@@ -86,7 +96,7 @@ commit their audit row before the error is returned. Metadata is redacted; no pa
 |---|---|
 | `GET /health` | Liveness; no dependency calls. Used by the container healthcheck. |
 | `GET /ready` | Postgres `SELECT 1` and Redis `PING` concurrently (2 s each); 200 or 503 with per-dependency status and the error class only. |
-| `GET /metrics` | Prometheus: `http_requests_total`, `http_request_duration_seconds`, `auth_events_total`. |
+| `GET /metrics` | Prometheus: `http_requests_total`, `http_request_duration_seconds`, `auth_events_total`; on the ingest process (:8001) also `ingest_requests_total`, `ingest_records_total`, `ingest_queue_pending`. The writer counts `ingest_rows_written_total` and `ingest_dead_letters_total`. |
 
 Compose healthchecks: `pg_isready`, `redis-cli ping`, `/health`, `celery inspect ping`, frontend
 `/healthz`. Services start in dependency order (`service_healthy`, `service_completed_successfully`

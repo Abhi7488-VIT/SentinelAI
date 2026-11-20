@@ -5,8 +5,10 @@ failures into incidents, investigates root causes with evidence-bound workflows,
 for human review. **It never modifies production systems or pushes code without explicit human
 approval.**
 
-> Status: **Phase 1 (Foundation) complete** — auth, organizations, RBAC, projects, health/readiness,
-> CI. Incident features start in Phase 3. See [`docs/PROGRESS.md`](docs/PROGRESS.md).
+> Status: **Phase 3 (Incident management)** on branch `phase-3-incident-management`: service
+> registry and ingest keys, OTLP/HTTP ingestion, partitioned telemetry storage, dependency graph,
+> deterministic detection, correlation into incidents, and the UI for all of it. Root-cause
+> investigation is Phase 4. See [`docs/PROGRESS.md`](docs/PROGRESS.md).
 
 ## Layout
 
@@ -35,11 +37,17 @@ cp .env.example .env
 #   python -c "import secrets; print(secrets.token_hex(16))"      # passwords
 #   python -c "import secrets; print(secrets.token_urlsafe(48))"  # JWT_SECRET
 
-docker compose up --build -d --wait     # postgres, redis, migrate (one-shot), backend, worker, frontend
-docker compose ps                       # every long-running service shows (healthy); migrate Exited (0)
+docker compose up --build -d --wait     # postgres, redis, migrate (one-shot), backend, worker,
+                                        # ingest, ingest-writer, beat, frontend
+docker compose ps                       # long-running services up (healthy where they have a
+                                        # healthcheck); migrate Exited (0)
 ```
 
-- App: <http://localhost:3000> — register, create projects.
+- App: <http://localhost:3000> — register, create a project, add services, create an ingest key
+  (shown once) and point an OTel exporter at it. Incidents open on their own when detections fire.
+- OTLP/HTTP ingest: `http://localhost:8001/api/v1/otlp` (the exporter appends `/v1/traces`,
+  `/v1/logs`, `/v1/metrics`), header `Authorization: Bearer sai_…`. One key per service; data for
+  another `service.name` is rejected and counted.
 - API docs (OpenAPI): <http://localhost:8000/docs>
 - Liveness: `curl http://localhost:8000/health` → `{"status":"ok"}`
 - Readiness: `curl http://localhost:8000/ready` → 200 with per-dependency checks; 503 when Postgres
@@ -53,7 +61,21 @@ docker compose down        # stop, keep data
 docker compose down -v     # stop and delete all data (fresh start)
 ```
 
-Published ports bind to 127.0.0.1 only: 3000 (frontend), 8000 (API), 5432 (Postgres), 6379 (Redis).
+Published ports bind to 127.0.0.1 only: 3000 (frontend), 8000 (API), 8001 (OTLP ingest),
+5432 (Postgres), 6379 (Redis).
+
+### Feed it the testbed (Phase 2 shop)
+
+```bash
+docker compose up -d                   # SentinelAI first: creates the shared network
+make sentinel-connect REGISTER=1       # registers project `shop` + 5 services, writes keys and
+                                       # SENTINELAI_OTLP_ENDPOINT to testbed/.env
+make testbed-up                        # the shop; its Collector now also exports to SentinelAI
+make scenario-run ID=db-pool-exhaustion SEED=42
+make evaluate-incidents RUN=<run_id>   # harness-side scoring against ground truth (ADR 0003)
+```
+
+Exact steps and variables: [`docs/testbed.md` §3](docs/testbed.md#sending-telemetry-to-sentinelai-phase-3).
 
 ### Windows + WSL2 notes
 
@@ -108,7 +130,17 @@ npm run lint
 npm run typecheck
 npm test
 npm run build
-npm run e2e        # Playwright golden path; needs the full stack (docker compose up)
+npm run e2e        # Playwright: Phase 1 path + Phase 3 incident path; needs the full stack
+```
+
+Local benchmarks (stack running; results are for the machine they run on, written as JSON with
+machine info and commit):
+
+```bash
+cd backend
+DB=postgresql+asyncpg://sentinel:<password>@127.0.0.1:5432/sentinel
+uv run python -m scripts.bench_incidents --database-url "$DB" --out /tmp/incidents.json
+uv run python -m scripts.bench_ingest    --database-url "$DB" --out /tmp/ingest.json
 ```
 
 `sentinel_test` is created by `infrastructure/postgres/init/` on the first start of an empty
@@ -139,7 +171,15 @@ CI fails if either generated file is out of date.
 
 ## Documentation
 
-- [Architecture overview](docs/architecture/overview.md) · [Frontend](docs/architecture/frontend.md)
-- [ADR 0001 — Authentication](docs/decisions/0001-auth.md) ·
-  [ADR 0002 — Tenant isolation](docs/decisions/0002-tenant-isolation.md)
-- [Phase 1 plan](docs/plans/phase-1.md) · [Progress log](docs/PROGRESS.md)
+- [Architecture overview](docs/architecture/overview.md) ·
+  [Incident pipeline](docs/architecture/incident-pipeline.md) ·
+  [Frontend](docs/architecture/frontend.md) · [Testbed](docs/testbed.md)
+- ADRs: [0001 Authentication](docs/decisions/0001-auth.md) ·
+  [0002 Tenant isolation](docs/decisions/0002-tenant-isolation.md) ·
+  [0003 Testbed and evaluation integrity](docs/decisions/0003-testbed-and-evaluation-integrity.md) ·
+  [0004 Live verification](docs/decisions/0004-live-verification-in-codespaces-ci.md) ·
+  [0005 Telemetry storage](docs/decisions/0005-telemetry-storage.md) ·
+  [0006 Detection and correlation](docs/decisions/0006-detection-and-correlation.md)
+- Plans: [phase 1](docs/plans/phase-1.md) · [phase 2](docs/plans/phase-2.md) ·
+  [phase 3](docs/plans/phase-3.md) · [Progress log](docs/PROGRESS.md) ·
+  [Phase 3 evidence](docs/evidence/phase-3/)
