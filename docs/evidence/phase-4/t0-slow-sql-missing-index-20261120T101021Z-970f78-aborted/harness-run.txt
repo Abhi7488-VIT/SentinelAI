@@ -1,0 +1,7 @@
+[controller] run 20261120T101021Z-970f78: slow-sql-missing-index seed=42 baseline=120s observe=300s recovery=180s
+[2026-11-20T10:10:21+00:00] reset: scenario slow-sql-missing-index (full)
+[2026-11-20T10:10:21+00:00] error: InvalidPasswordError('password authentication failed for user "testbed"')
+scenario slow-sql-missing-index  run 20261120T101021Z-970f78  seed 42  -> FAILED
+  fault: 2026-11-20T10:10:21+00:00 -> 2026-11-20T10:10:21+00:00
+  reason: controller error: InvalidPasswordError('password authentication failed for user "testbed"')
+make: *** [Makefile:66: scenario-run] Error 1

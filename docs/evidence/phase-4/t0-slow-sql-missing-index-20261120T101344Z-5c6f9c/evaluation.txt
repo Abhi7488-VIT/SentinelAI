@@ -1,0 +1,17 @@
+slow-sql-missing-index run 20261120T101344Z-5c6f9c (harness: verified): FAIL
+  [FAIL] exactly_one_incident: expected 1, got 2
+  [FAIL] expected_services_affected: expected ['api-gateway', 'frontend', 'order-service'], got []
+  [FAIL] unaffected_services_excluded: expected none of ['payment-service', 'user-service'], got []
+  [FAIL] grouping_is_structural: expected every joined detection has >= 1 reason, got {}
+  [FAIL] detected_during_fault: expected first detection fired before 2026-11-20T10:20:50+00:00, got None
+  [FAIL] explanations_readable: expected no problems, got {}
+  [ok  ] no_false_positives: expected 0, got 0
+  time_to_first_detection_s: None
+  time_to_incident_s: None
+  incident_detected_after_fault_s: None
+  detections_in_incident: 0
+  false_positive_detections: 0
+  other_incidents_during_run: 0
+  root_cause_service_has_detection: False
+written: /workspaces/SentinelAI/testbed/runs/slow-sql-missing-index/20261120T101344Z-5c6f9c/sentinelai-evaluation.json
+make: *** [Makefile:80: evaluate-incidents] Error 1

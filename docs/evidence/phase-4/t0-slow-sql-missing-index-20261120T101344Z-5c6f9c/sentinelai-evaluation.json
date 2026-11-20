@@ -1,0 +1,100 @@
+{
+  "scenario": "slow-sql-missing-index",
+  "run_id": "20261120T101344Z-5c6f9c",
+  "run_status": "verified",
+  "fault_window": {
+    "start": "2026-11-20T10:15:45+00:00",
+    "end": "2026-11-20T10:20:50+00:00"
+  },
+  "run_window": {
+    "start": "2026-11-20T10:13:45+00:00",
+    "end": "2026-11-20T10:23:50+00:00"
+  },
+  "ground_truth": {
+    "expected_affected_services": [
+      "api-gateway",
+      "frontend",
+      "order-service"
+    ],
+    "unaffected_services": [
+      "payment-service",
+      "user-service"
+    ],
+    "root_cause_service": "order-service"
+  },
+  "passed": false,
+  "checks": [
+    {
+      "check": "exactly_one_incident",
+      "passed": false,
+      "expected": 1,
+      "actual": 2
+    },
+    {
+      "check": "expected_services_affected",
+      "passed": false,
+      "expected": [
+        "api-gateway",
+        "frontend",
+        "order-service"
+      ],
+      "actual": []
+    },
+    {
+      "check": "unaffected_services_excluded",
+      "passed": false,
+      "expected": "none of ['payment-service', 'user-service']",
+      "actual": []
+    },
+    {
+      "check": "grouping_is_structural",
+      "passed": false,
+      "expected": "every joined detection has >= 1 reason",
+      "actual": {}
+    },
+    {
+      "check": "detected_during_fault",
+      "passed": false,
+      "expected": "first detection fired before 2026-11-20T10:20:50+00:00",
+      "actual": null
+    },
+    {
+      "check": "explanations_readable",
+      "passed": false,
+      "expected": "no problems",
+      "actual": {}
+    },
+    {
+      "check": "no_false_positives",
+      "passed": true,
+      "expected": 0,
+      "actual": 0
+    }
+  ],
+  "metrics": {
+    "time_to_first_detection_s": null,
+    "time_to_incident_s": null,
+    "incident_detected_after_fault_s": null,
+    "detections_in_incident": 0,
+    "false_positive_detections": 0,
+    "other_incidents_during_run": 0,
+    "root_cause_service_has_detection": false
+  },
+  "incident": null,
+  "opener_detection_id": null,
+  "incident_detections": [],
+  "incidents_in_fault_window": [
+    {
+      "number": 4,
+      "title": "Latency in api-gateway, frontend",
+      "started_at": "2026-11-20T10:16:15Z"
+    },
+    {
+      "number": 5,
+      "title": "Latency in order-service",
+      "started_at": "2026-11-20T10:16:15Z"
+    }
+  ],
+  "other_incidents_during_run": [],
+  "false_positives": []
+}

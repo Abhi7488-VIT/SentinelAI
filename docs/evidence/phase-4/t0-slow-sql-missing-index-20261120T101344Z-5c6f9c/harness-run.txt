@@ -1,0 +1,19 @@
+[controller] run 20261120T101344Z-5c6f9c: slow-sql-missing-index seed=42 baseline=120s observe=300s recovery=180s
+[2026-11-20T10:13:44+00:00] reset: scenario slow-sql-missing-index (full)
+[2026-11-20T10:13:45+00:00] sql: revert drop-order-history-indexes
+[2026-11-20T10:13:45+00:00] traffic: mix=baseline seed=42
+[2026-11-20T10:15:45+00:00] baseline: healthy: orders-p95-normal, order-5xx-low
+[2026-11-20T10:15:45+00:00] sql: apply drop-order-history-indexes
+[2026-11-20T10:20:45+00:00] observe: orders-p95-slow=yes, account-p95-slow=yes, orders-slow-select-spans=yes, orders-no-error-spike=yes
+[2026-11-20T10:20:50+00:00] sql: revert drop-order-history-indexes
+[2026-11-20T10:23:50+00:00] recovery: orders-p95-normal=ok, order-5xx-low=ok
+scenario slow-sql-missing-index  run 20261120T101344Z-5c6f9c  seed 42  -> VERIFIED
+  fault: 2026-11-20T10:15:45+00:00 -> 2026-11-20T10:20:50+00:00
+  baseline  ok  orders-p95-normal                peak= 0.009771 onset=    0s  9/9 points < 0.05 (needs >= 100% of points)
+  baseline  ok  order-5xx-low                    peak=        0 onset=    0s  9/9 points < 0.01 (needs >= 100% of points)
+  symptoms  ok  orders-p95-slow                  peak=    2.387 onset=   15s  20/21 points > 0.05 (needs >= 8 consecutive points)
+  symptoms  ok  account-p95-slow                 peak=    2.397 onset=   15s  20/21 points > 0.1359 (needs >= 8 consecutive points)
+  symptoms  ok  orders-slow-select-spans         peak=       50 onset=  262s  50 matching traces >= 5?
+  symptoms  ok  orders-no-error-spike            peak=        0 onset=    0s  21/21 points < 0.01 (needs >= 100% of points)
+  recovery  ok  orders-p95-normal                peak=  0.00875 onset=    0s  7/7 points < 0.05 (needs >= 100% of points)
+  recovery  ok  order-5xx-low                    peak=        0 onset=    0s  7/7 points < 0.01 (needs >= 100% of points)

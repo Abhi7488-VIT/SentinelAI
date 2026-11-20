@@ -1,0 +1,13 @@
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/workspaces/SentinelAI/testbed/harness/evaluate.py", line 382, in <module>
+    sys.exit(main())
+             ^^^^^^
+  File "/workspaces/SentinelAI/testbed/harness/evaluate.py", line 358, in main
+    record = find_record(args.runs_dir, args.run)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspaces/SentinelAI/testbed/harness/controller/groundtruth.py", line 68, in find_record
+    raise ValueError(f"invalid run id {run_id!r}")
+ValueError: invalid run id '20261120T101021Z-970f78.json'
+make: *** [Makefile:80: evaluate-incidents] Error 1

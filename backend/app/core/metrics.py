@@ -46,3 +46,21 @@ INGEST_DEAD_LETTERS = Counter(
     "Ingest batches moved to the dead-letter list after exhausting retries, by reason.",
     ["reason"],
 )
+
+# ---- LLM calls (Phase 4). Labels: purpose/outcome/provider/kind are fixed enums. ----
+LLM_CALLS = Counter(
+    "llm_calls_total",
+    "LLM call attempts by purpose and outcome.",
+    ["purpose", "outcome"],
+)
+LLM_TOKENS = Counter(
+    "llm_tokens_total",
+    "LLM tokens by provider (fake counts are estimates) and kind.",
+    ["provider", "kind"],
+)
+LLM_LATENCY = Histogram(
+    "llm_latency_seconds",
+    "LLM call attempt latency by purpose.",
+    ["purpose"],
+    buckets=(0.1, 0.5, 1.0, 2.5, 5.0, 10.0, 20.0, 40.0, 60.0, 90.0, 120.0),
+)

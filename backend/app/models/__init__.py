@@ -9,6 +9,7 @@ from app.models.detection import (
 )
 from app.models.graph import EdgeSource, ServiceEdge
 from app.models.incident import Incident, IncidentDetection, IncidentEvent, IncidentService
+from app.models.llm_call import LLMCall
 from app.models.organization import Organization, OrganizationMember, Role
 from app.models.project import Project
 from app.models.refresh_token import RefreshToken
@@ -37,6 +38,7 @@ __all__ = [
     "IncidentService",
     "IngestBatch",
     "IngestUsage",
+    "LLMCall",
     "LogRecord",
     "MetricPoint",
     "MetricSeries",

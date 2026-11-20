@@ -1,0 +1,28 @@
+== preconditions at 2026-11-20T10:13:41Z
+{
+  "active": null
+}
+ state | count 
+-------+-------
+ ok    |    20
+(1 row)
+
+ open_detections 
+-----------------
+               0
+(1 row)
+
+ number | status |                                      title                                      |    last_activity_at    
+--------+--------+---------------------------------------------------------------------------------+------------------------
+      1 | open   | Resource saturation, latency and errors in order-service, api-gateway, frontend | 2026-11-19 17:25:30+00
+      2 | open   | Errors, latency and resource saturation in api-gateway, frontend, order-service | 2026-11-19 19:09:30+00
+      3 | open   | Latency, errors and resource saturation in api-gateway, frontend, order-service | 2026-11-19 21:32:30+00
+(3 rows)
+
+          min           |          max           | buckets 
+------------------------+------------------------+---------
+ 2026-11-20 09:38:45+00 | 2026-11-20 10:12:30+00 |     133
+(1 row)
+
+{"mix":"baseline","seed":42,"mix_started_at":1795167788.5045776,"in_flight":0,"dropped":0,"totals":{"requests":18446,"errors":0,"error_rate":0.0,"declined":46,"p50_ms":11.0,"p95_ms":80.0,"by_action":{"browse":9218,"product":3707,"login":912,"account":2772,"checkout":1837},"errors_by_action":{}}}
+405bf12a77c318e6a39bc0337bc35ed7ade9c8a3

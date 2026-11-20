@@ -69,6 +69,19 @@ class Settings(BaseSettings):
     ingest_max_series_per_service: int = Field(default=2000, ge=1)
     ingest_dead_letter_max: int = Field(default=1000, ge=1)
 
+    # LLM provider (Phase 4 plan §3). The key is read from the environment only (A4); never
+    # logged, stored, or put into events, reports or errors.
+    llm_provider: Literal["fake", "anthropic"] = "fake"
+    anthropic_api_key: SecretStr | None = None
+    llm_model: str = "claude-sonnet-5-5"  # development default (A1); opus-5-5 for final eval
+    llm_effort: Literal["low", "medium", "high", "xhigh", "max"] = "medium"
+    llm_timeout_seconds: float = Field(default=90.0, gt=0, le=600)
+    llm_max_invalid_retries: int = Field(default=2, ge=0, le=5)
+    llm_max_transport_retries: int = Field(default=3, ge=0, le=6)
+    llm_max_input_tokens: int = Field(default=30_000, ge=1000, le=200_000)
+    llm_max_output_tokens: int = Field(default=8000, ge=256, le=64_000)
+    llm_prices_json: str | None = None  # override of app.llm.pricing.DEFAULT_PRICES
+
     # HTTP
     cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:3000"])
 
@@ -78,6 +91,12 @@ class Settings(BaseSettings):
         if len(value.get_secret_value().encode()) < MIN_JWT_SECRET_BYTES:
             raise ValueError(f"JWT_SECRET must be at least {MIN_JWT_SECRET_BYTES} bytes")
         return value
+
+    @field_validator("anthropic_api_key", "llm_prices_json", mode="before")
+    @classmethod
+    def _empty_is_unset(cls, value: object) -> object:
+        # `ANTHROPIC_API_KEY=` in .env means "not configured", not an empty key.
+        return None if value == "" else value
 
     @model_validator(mode="after")
     def _prod_guards(self) -> Settings:
