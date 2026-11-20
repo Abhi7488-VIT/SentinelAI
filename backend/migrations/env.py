@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import re
 from logging.config import fileConfig
 
 from alembic import context
@@ -18,6 +19,14 @@ if config.config_file_name is not None and config.attributes.get("configure_logg
     fileConfig(config.config_file_name)
 
 target_metadata = Base.metadata
+
+# Daily partitions (e.g. spans_p20261119) are created and dropped at runtime by the telemetry
+# maintenance job, not by migrations; autogenerate must not report them as drift.
+_PARTITION_RE = re.compile(r"^(?:spans|log_records|metric_points)_p\d{8}$")
+
+
+def _include_name(name: str | None, type_: str, parent_names: object) -> bool:
+    return not (type_ == "table" and name is not None and _PARTITION_RE.match(name))
 
 
 def _database_url() -> str:
@@ -36,13 +45,19 @@ def run_migrations_offline() -> None:
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
         compare_type=True,
+        include_name=_include_name,
     )
     with context.begin_transaction():
         context.run_migrations()
 
 
 def _do_run_migrations(connection: Connection) -> None:
-    context.configure(connection=connection, target_metadata=target_metadata, compare_type=True)
+    context.configure(
+        connection=connection,
+        target_metadata=target_metadata,
+        compare_type=True,
+        include_name=_include_name,
+    )
     with context.begin_transaction():
         context.run_migrations()
 

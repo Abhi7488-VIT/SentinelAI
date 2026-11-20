@@ -1,0 +1,11 @@
+status_open                          p50   11.84  p95   32.37  p99   65.35 ms  items 50  non-200 0
+severity_critical                    p50   11.33  p95   19.92  p99   28.61 ms  items 50  non-200 0
+status_resolved_severity_critical    p50   11.70  p95   24.33  p99   40.79 ms  items 50  non-200 0
+project                              p50   11.81  p95   21.92  p99   43.96 ms  items 50  non-200 0
+service                              p50   13.89  p95   32.04  p99   56.40 ms  items 50  non-200 0
+time_range_1_day                     p50   11.66  p95   24.71  p99   44.86 ms  items 50  non-200 0
+search_title                         p50   11.53  p95   21.60  p99   33.42 ms  items 50  non-200 0
+search_title_no_match                p50   55.32  p95   93.58  p99  128.34 ms  items 0  non-200 0
+search_number                        p50    7.84  p95   16.43  p99   25.00 ms  items 1  non-200 0
+written: ../docs/evidence/phase-3/bench/incidents-list.json
+

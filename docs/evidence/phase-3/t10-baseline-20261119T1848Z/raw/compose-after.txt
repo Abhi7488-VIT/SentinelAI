@@ -1,0 +1,8 @@
+backend Up 41 minutes (healthy)
+beat Up 41 minutes
+frontend Up About an hour (healthy)
+ingest Up About an hour (healthy)
+ingest-writer Up About an hour (healthy)
+postgres Up About an hour (healthy)
+redis Up About an hour (healthy)
+worker Up 41 minutes (healthy)

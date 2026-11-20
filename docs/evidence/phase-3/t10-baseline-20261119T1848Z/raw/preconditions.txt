@@ -1,0 +1,27 @@
+preconditions at 2026-11-19T18:48:00Z
+{
+  "active": null
+}
+ state | count 
+-------+-------
+ ok    |    20
+(1 row)
+
+ open_detections 
+-----------------
+               0
+(1 row)
+
+ rollups_continuous_since 
+--------------------------
+ 2026-11-19 17:58:30+00
+(1 row)
+
+backend sentinelai-backend:dev 2026-11-19 18:17:41 +0000 UTC
+beat sentinelai-backend:dev 2026-11-19 18:17:41 +0000 UTC
+frontend sentinelai-frontend:dev 2026-11-19 11:39:28 +0000 UTC
+ingest sha256:d363fe434c7f36db3bf0f0ea9399867c463125bd71c9c02aedeab53f31db9822 2026-11-19 16:41:07 +0000 UTC
+ingest-writer sha256:d363fe434c7f36db3bf0f0ea9399867c463125bd71c9c02aedeab53f31db9822 2026-11-19 16:41:07 +0000 UTC
+postgres postgres:17-alpine 2026-11-19 10:38:52 +0000 UTC
+redis redis:7-alpine 2026-11-19 10:38:52 +0000 UTC
+worker sentinelai-backend:dev 2026-11-19 18:17:41 +0000 UTC

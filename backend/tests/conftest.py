@@ -15,6 +15,13 @@ from dotenv import dotenv_values
 from app.core.config import Settings
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+
+# Tests must not depend on the shell. A shell that exports the repo's .env would otherwise change
+# Settings (e.g. retention days), and Celery lets CELERY_BROKER_URL / CELERY_RESULT_BACKEND
+# override the configured broker, which would send test tasks to the live stack's Redis.
+# TEST_* variables are not Settings fields and are kept.
+for _field in Settings.model_fields:
+    os.environ.pop(_field.upper(), None)
 _DOTENV = {k: v for k, v in dotenv_values(REPO_ROOT / ".env").items() if v is not None}
 
 TEST_JWT_SECRET = "test-only-jwt-secret-" + "x" * 40

@@ -8,7 +8,7 @@
  * Phone: the frame disappears; a 48px bar holds the menu button and the screen name, and the
  * navigation opens as a sheet.
  */
-import { ChevronsUpDown, FolderKanban, LogOut, Menu } from "lucide-react";
+import { ChevronsUpDown, FolderKanban, LogOut, Menu, Siren } from "lucide-react";
 import Link from "next/link";
 import { useParams, usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -29,7 +29,10 @@ import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/s
 import type { Me, Membership } from "@/lib/api/types";
 import { useAuth } from "@/lib/auth/auth-provider";
 
-const NAV = [{ segment: "projects", label: "Projects", icon: FolderKanban }] as const;
+const NAV = [
+  { segment: "projects", label: "Projects", icon: FolderKanban },
+  { segment: "incidents", label: "Incidents", icon: Siren },
+] as const;
 
 function roleLabel(role: Membership["role"]): string {
   return role.charAt(0).toUpperCase() + role.slice(1);

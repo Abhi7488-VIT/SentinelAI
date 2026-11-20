@@ -1,7 +1,8 @@
 # Frontend architecture and design
 
 Next.js 16 (App Router, Cache Components on), TypeScript strict, Tailwind v4, shadcn/ui (Base UI
-primitives), TanStack Query. Light theme only in Phase 1.
+primitives), TanStack Query, Recharts (charts) and React Flow (`@xyflow/react`, service map).
+Light theme only.
 
 ## Data and auth
 
@@ -37,10 +38,39 @@ Dealt with the design-taste skill (app style `framed-sheet`, seed 148330720) and
   identity column widest, dates right-aligned in ISO form, one status mark per row.
 - States inside the block: loading keeps the final layout with flat grey bars; errors name what
   failed with the request id and a Retry; empty keeps the header and one sentence with the action.
-- Honest data: every project shows "No telemetry yet" because OTLP ingestion arrives in Phase 3.
+- Honest data: Phase 1 showed "No telemetry yet" on every project because ingestion did not exist;
+  Phase 3 removed that static label (it would now be false) — status comes from the API only.
 
 Checks run on the final build (`.taste-skill/` holds the artifacts, not committed): the skill's
 linter and inspector at 1440/768/390 — 0 FAIL. Remaining warnings, accepted: the white sheet below
 a short list is the page's end, not a stretched card; 12px sublines/pills on the phone; and a
 font-fallback warning that only occurs in the script-free snapshot used to inspect the signed-in
 screen (the live login page measured IBM Plex at 100%).
+
+## Pages (Phase 3)
+
+| Route | What it shows | Source |
+|---|---|---|
+| `/orgs/[orgId]/projects` | projects, each linking to its overview | `GET /projects` |
+| `/orgs/[orgId]/projects/[projectId]` | **Overview**: open incidents by severity, detections in 24 h by rule, latest incidents, per service health / last telemetry / ingest accepted+rejected (15 min) / requests and errors per minute (60 min, with a table view) | `GET /overview` |
+| `…/[projectId]/services` | **Services**: registry list, create (engineer), declared dependencies (engineer), ingest keys — created key shown once, revoke (admin), archive (admin) | services + api-keys endpoints |
+| `…/[projectId]/map` | **Service map**: React Flow over a deterministic layered layout (`service-map/layout.ts`), edge style by source (dashed declared, solid observed, thicker both), node border by health, externals as grey pills, click → calls/callers; an edge table is the accessible view | `GET /service-graph` |
+| `/orgs/[orgId]/incidents` | **Incidents**: filters in the URL (status, severity, project, service, started-within, search), cursor paging | `GET /incidents` |
+| `/orgs/[orgId]/incidents/[id]` | **Incident**: header, allowed status transitions (engineer), affected services, each detection with explanation, numbers and "grouped because" reasons, timeline | incident detail + events |
+
+Conventions:
+
+- Read views poll every 15 s (`POLL_MS`, `src/lib/api/keys.ts`); query keys live in one file so a
+  mutation invalidates exactly what it changed.
+- Every view has loading / error (message + request id + Retry) / empty states from
+  `components/common/states.tsx`; empty states say what is missing ("No telemetry yet. Register a
+  service and create an ingest key…") instead of showing zeros.
+- Charts: one axis (requests and errors per minute share a unit); series colours `#2a78d6` /
+  `#d03b3b`, checked with the dataviz palette validator on the light surface; minutes without
+  rollups are gaps; the newest minutes that are still filling (rollups run 30 s behind) are not
+  plotted, so the line never shows a false drop.
+- Grid tracks are `minmax(0,1fr)` so truncated text cannot widen a page: every Phase 3 page measured
+  `scrollWidth` 390 at a 390 px viewport (2026-11-19).
+- Tests: Vitest for presentational components and pure helpers (layout, minute filling, URL
+  filters); Playwright `e2e/incident-path.spec.ts` drives the real stack from service creation to an
+  explained incident.

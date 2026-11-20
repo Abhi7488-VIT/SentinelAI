@@ -1,0 +1,16 @@
+db-pool-exhaustion run 20261119T185934Z-335bba (harness: verified): PASS
+  [ok  ] exactly_one_incident: expected 1, got 1
+  [ok  ] expected_services_affected: expected ['api-gateway', 'frontend', 'order-service'], got ['api-gateway', 'frontend', 'order-service']
+  [ok  ] unaffected_services_excluded: expected none of ['payment-service', 'user-service'], got []
+  [ok  ] grouping_is_structural: expected every joined detection has >= 1 reason, got {'01819c6b-76a5-4ea5-9ba2-726ee8588162': 3, '342dd119-a8c7-4c64-9d32-f85e9733d2f7': 1, '7ff504ea-4c57-4ad8-a3bf-1f9d24e19b4a': 4, 'bc9f21dd-4f9a-4fd5-ae6b-8eaaaae4aa4f': 3, 'c43ab8ac-da4a-4b86-a228-278a6d929f5d': 4, 'f55c189e-e698-4d22-a086-f684ff0a7072': 4}
+  [ok  ] detected_during_fault: expected first detection fired before 2026-11-19T19:06:35+00:00, got 2026-11-19T19:02:45+00:00
+  [ok  ] explanations_readable: expected no problems, got {}
+  [ok  ] no_false_positives: expected 0, got 0
+  time_to_first_detection_s: 71.0
+  time_to_incident_s: 103.275145
+  incident_detected_after_fault_s: 71.0
+  detections_in_incident: 7
+  false_positive_detections: 0
+  other_incidents_during_run: 0
+  root_cause_service_has_detection: True
+written: ../docs/evidence/phase-3/s1-20261119T185934Z-335bba/sentinelai-evaluation-rescored-afcafd7.json

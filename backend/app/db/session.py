@@ -32,6 +32,9 @@ def create_engine(settings: Settings, *, application_name: str = "sentinelai-api
             "server_settings": {
                 "application_name": application_name,
                 "statement_timeout": str(settings.db_statement_timeout_ms),
+                # JIT compilation dominated our short telemetry queries over partitions
+                # (measured 733 ms -> 17 ms for the graph query with JIT off; ADR 0005).
+                "jit": "off",
             },
         },
     )

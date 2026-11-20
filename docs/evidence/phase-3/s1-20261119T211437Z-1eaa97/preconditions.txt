@@ -1,0 +1,22 @@
+== preconditions at 2026-11-19T21:14:34Z
+{
+  "active": null
+}
+ state | count 
+-------+-------
+ ok    |    20
+(1 row)
+
+ open_detections 
+-----------------
+               0
+(1 row)
+
+          min           |          max           | buckets 
+------------------------+------------------------+---------
+ 2026-11-19 20:44:45+00 | 2026-11-19 21:13:30+00 |     116
+(1 row)
+
+{"mix":"baseline","seed":42,"mix_started_at":1795121073.5819554,"in_flight":0,"dropped":0,"totals":{"requests":18107,"errors":211,"error_rate":0.0117,"declined":70,"p50_ms":11.3,"p95_ms":82.2,"by_action":{"account":2709,"browse":9053,"product":3648,"login":889,"checkout":1808},"errors_by_action":{"account":33,"browse":103,"product":47,"login":10,"checkout":18}}}
+
+7e581b0f3a9bb8d105a910eb79471be4ea4b3580

@@ -7,6 +7,10 @@ set -euo pipefail
 
 TB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 COMPOSE=(docker compose -f "$TB_DIR/docker-compose.yml" --env-file "$TB_DIR/.env")
+# Connected to SentinelAI (make sentinel-connect)? Then the Collector also joins its ingest network.
+if [[ -f "$TB_DIR/.env" ]] && grep -Eq '^SENTINELAI_OTLP_ENDPOINT=.+' "$TB_DIR/.env"; then
+  COMPOSE+=(-f "$TB_DIR/docker-compose.sentinelai.yml")
+fi
 
 log() { printf '[testbed] %s\n' "$*"; }
 die() { printf '[testbed] error: %s\n' "$*" >&2; exit 1; }

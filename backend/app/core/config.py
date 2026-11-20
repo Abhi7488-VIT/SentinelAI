@@ -47,6 +47,28 @@ class Settings(BaseSettings):
     auth_rate_limit_attempts: int = Field(default=10, ge=1)
     auth_rate_limit_window_seconds: int = Field(default=60, ge=1)
 
+    # Telemetry storage (ADR 0005). Daily partitions; retention in whole days.
+    telemetry_retention_spans_days: int = Field(default=3, ge=1, le=90)
+    telemetry_retention_logs_days: int = Field(default=3, ge=1, le=90)
+    telemetry_retention_metrics_days: int = Field(default=7, ge=1, le=90)
+    telemetry_partition_days_ahead: int = Field(default=2, ge=1, le=14)
+    ingest_usage_retention_days: int = Field(default=30, ge=1, le=365)
+
+    # OTLP ingestion (Phase 3 plan §4). Sizes in bytes; rates per key per second.
+    ingest_max_body_bytes: int = Field(default=4 * 1024 * 1024, ge=1024)
+    ingest_max_decompressed_bytes: int = Field(default=16 * 1024 * 1024, ge=1024)
+    ingest_max_records_per_request: int = Field(default=10_000, ge=1)
+    ingest_rate_requests_per_second: int = Field(default=50, ge=1)
+    ingest_rate_records_per_second: int = Field(default=20_000, ge=1)
+    ingest_max_age_seconds: int = Field(default=7200, ge=60)
+    ingest_max_future_seconds: int = Field(default=300, ge=0)
+    ingest_key_cache_seconds: float = Field(default=10.0, ge=0, le=60)
+    ingest_queue_max_pending: int = Field(default=100, ge=1)
+    ingest_queue_max_message_bytes: int = Field(default=2 * 1024 * 1024, ge=1024)
+    # Writer: metric cardinality guard and capped dead-letter list.
+    ingest_max_series_per_service: int = Field(default=2000, ge=1)
+    ingest_dead_letter_max: int = Field(default=1000, ge=1)
+
     # HTTP
     cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:3000"])
 

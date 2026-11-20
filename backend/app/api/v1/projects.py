@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import uuid
-from typing import Any
+from typing import Annotated, Any
 
-from fastapi import APIRouter, Response, status
+from fastapi import APIRouter, Query, Response, status
 
 from app.api.deps import RequestMetaDep, SessionDep
 from app.api.pagination import PageDep
@@ -22,9 +22,14 @@ _errors: dict[int | str, dict[str, Any]] = {
 
 
 @router.get("", response_model=Page[ProjectOut], responses=_errors)
-async def list_projects(ctx: ViewerCtx, session: SessionDep, page: PageDep) -> Page[ProjectOut]:
+async def list_projects(
+    ctx: ViewerCtx,
+    session: SessionDep,
+    page: PageDep,
+    include_archived: Annotated[bool, Query()] = False,
+) -> Page[ProjectOut]:
     projects, next_cursor = await ProjectService(session, ctx).list(
-        limit=page.limit, cursor=page.cursor
+        limit=page.limit, cursor=page.cursor, include_archived=include_archived
     )
     return Page[ProjectOut](
         items=[ProjectOut.model_validate(p) for p in projects], next_cursor=next_cursor
@@ -61,8 +66,9 @@ async def update_project(
 
 
 @router.delete("/{project_id}", status_code=status.HTTP_204_NO_CONTENT, responses=_errors)
-async def delete_project(
+async def archive_project(
     project_id: uuid.UUID, ctx: AdminCtx, session: SessionDep, meta: RequestMetaDep
 ) -> Response:
-    await ProjectService(session, ctx).delete(project_id, meta=meta)
+    """Archive (never hard-delete): also archives its services and revokes their ingest keys."""
+    await ProjectService(session, ctx).archive(project_id, meta=meta)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

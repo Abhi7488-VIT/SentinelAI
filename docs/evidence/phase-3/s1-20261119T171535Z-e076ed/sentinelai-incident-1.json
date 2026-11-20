@@ -1,0 +1,817 @@
+{
+  "id": "9eed7446-8742-47ec-93b9-03372ff9fc3f",
+  "project_id": "a4bffde3-4fb9-4cb2-a30f-e66191ae0888",
+  "number": 1,
+  "title": "Resource saturation, latency and errors in order-service, api-gateway, frontend",
+  "status": "open",
+  "severity": "critical",
+  "started_at": "2026-11-19T17:17:15Z",
+  "detected_at": "2026-11-19T17:18:15Z",
+  "last_activity_at": "2026-11-19T17:25:30Z",
+  "resolved_at": null,
+  "detections_resolved_at": null,
+  "created_at": "2026-11-19T17:18:47.849190Z",
+  "updated_at": "2026-11-19T17:26:02.830088Z",
+  "services": [
+    {
+      "id": "e23db41e-1864-4992-8ee0-25947d02641f",
+      "name": "order-service",
+      "environment": "testbed"
+    },
+    {
+      "id": "88b7b02d-2154-49e4-a3d2-a3e32eab7bd2",
+      "name": "frontend",
+      "environment": "testbed"
+    },
+    {
+      "id": "f4ff5bb9-442a-4b6f-8b55-4eddbc21e38e",
+      "name": "api-gateway",
+      "environment": "testbed"
+    }
+  ],
+  "detections": [
+    {
+      "detection": {
+        "id": "979b3005-3bd8-49ab-8c3f-cf50b7988a08",
+        "service_id": "e23db41e-1864-4992-8ee0-25947d02641f",
+        "rule": "resource_saturation",
+        "severity": "critical",
+        "metric": "pool_utilization",
+        "observed_value": 1.0,
+        "baseline_value": null,
+        "threshold": 0.9,
+        "peak_value": 1.0,
+        "last_value": 0.0,
+        "started_at": "2026-11-19T17:17:15Z",
+        "fired_at": "2026-11-19T17:18:15Z",
+        "resolved_at": "2026-11-19T17:24:30Z",
+        "explanation": "order-service: connection pool `order-service` 10/10 in use (100.0%) with 23 pending requests at 17:18:15Z (instance efc711da86fe406f84c55edc0ef88d68), at or above 90.0% with waiters for 60 s (fires after 60 s). Top exception: `sqlalchemy.exc.TimeoutError: QueuePool limit of size # overflow # reached, connection timed out, timeout # (Background \u2026` (301 spans). Sample traces: 6c52a92d\u2026, 82405cc5\u2026, 204e84e2\u2026.",
+        "evidence": {
+          "facts": {
+            "pools": [
+              {
+                "max": 10.0,
+                "pool": "order-service",
+                "used": 10.0,
+                "pending": 23.0,
+                "instance": "efc711da86fe406f84c55edc0ef88d68"
+              }
+            ],
+            "memory": [
+              {
+                "instance": "efc711da86fe406f84c55edc0ef88d68",
+                "used_bytes": 119541760.0,
+                "limit_bytes": 167772160
+              }
+            ]
+          },
+          "params": {
+            "fire": 0.9,
+            "clear": 0.7,
+            "critical": null,
+            "min_samples": 1,
+            "min_duration_s": 60,
+            "clear_duration_s": 120
+          },
+          "window": {
+            "end": "2026-11-19T17:18:15+00:00",
+            "start": "2026-11-19T17:17:15+00:00"
+          },
+          "sample_trace_ids": [
+            "6c52a92d230346a0404c9deb83ecfbf9",
+            "82405cc5590577256a371d3d78148e4c",
+            "204e84e2ceba3925d84ced435a84709b",
+            "7ace54c165b1d686e38fbf6989b9355c",
+            "bd839b4f22bfa002a5927e572a10a55b",
+            "3d452c10fe00ca804956ee6e193b528e",
+            "60675d3d7ba5ff6b53d1294858118f1b",
+            "daebef57985f66b4792a5bc6e9c38658",
+            "8bc7d1bbf82646b6d1405df9b220a966",
+            "0a91e5699831854b83ce77bfbc66d047",
+            "8c786d74aa240d66b542d44e8d6a54af",
+            "f49fe597612bf934095e3e7f3aa1f53b",
+            "bff8a044e1a8ee74bfd288c114fef4b3",
+            "353bc10a389c2e2f00335e9ce0c3c715",
+            "6f83ae5a0019bd1af122485def94df9d",
+            "5bf38e540adc5671b404edd9b2367bfd",
+            "58babd88b6af20411b609beef6340977",
+            "a5ad94fb5ef566400ae728800586ae44",
+            "f29d427178ed17c277db69825c527428",
+            "703ab564c3b4940e7a6f0fffde730ea0"
+          ],
+          "exception_signatures": [
+            {
+              "type": "sqlalchemy.exc.TimeoutError",
+              "count": 301,
+              "message": "QueuePool limit of size # overflow # reached, connection timed out, timeout # (Background on this error at: https://sqlalche.me/e/#/#o#r)",
+              "signature": "0932c907c6f49ec4"
+            },
+            {
+              "type": "shop.common.errors.ServiceUnavailableError",
+              "count": 301,
+              "message": "Timed out waiting for a database connection from the pool.",
+              "signature": "bed391ada71937b3"
+            },
+            {
+              "type": "asyncpg.exceptions.QueryCanceledError",
+              "count": 10,
+              "message": "canceling statement due to statement timeout",
+              "signature": "c3dfa0cb43bde7a3"
+            }
+          ]
+        },
+        "created_at": "2026-11-19T17:18:47.849190Z",
+        "updated_at": "2026-11-19T17:25:02.854138Z"
+      },
+      "reasons": [],
+      "score": 0,
+      "linked_at": "2026-11-19T17:18:47.849190Z"
+    },
+    {
+      "detection": {
+        "id": "2ead0e4b-56c3-4779-8840-97789eb3bf87",
+        "service_id": "88b7b02d-2154-49e4-a3d2-a3e32eab7bd2",
+        "rule": "latency_shift",
+        "severity": "critical",
+        "metric": "p95_ms",
+        "observed_value": 3107.4239328500003,
+        "baseline_value": 76.32090735000003,
+        "threshold": 228.96272205000008,
+        "peak_value": 3136.4334832,
+        "last_value": 78.38342154999988,
+        "started_at": "2026-11-19T17:17:45Z",
+        "fired_at": "2026-11-19T17:19:45Z",
+        "resolved_at": "2026-11-19T17:25:45Z",
+        "explanation": "frontend: p95 latency 3107 ms over 60 s ending 17:19:45Z (604 server requests), 40.7x the baseline of 76 ms (median per-minute p95 over the previous 30 min, 30 minutes); threshold 229 ms, held 120 s (fires after 120 s). Top exception: `httpx.ReadTimeout` (5 spans). Sample traces: 36e09ab1\u2026, f6551da1\u2026, ee98808a\u2026.",
+        "evidence": {
+          "facts": {
+            "p95_ms": 3107.4239328500003,
+            "samples": 604,
+            "window_s": 60,
+            "baseline_minutes": 30
+          },
+          "params": {
+            "fire": 3.0,
+            "clear": 1.5,
+            "critical": 10.0,
+            "min_samples": 20,
+            "min_duration_s": 120,
+            "clear_duration_s": 120
+          },
+          "window": {
+            "end": "2026-11-19T17:19:45+00:00",
+            "start": "2026-11-19T17:18:45+00:00"
+          },
+          "sample_trace_ids": [
+            "36e09ab1fc6ba0a8d76472d0abaea111",
+            "f6551da1f828090d3489632ebaabd550",
+            "ee98808af6f9cdad53d8099ca0ea5767",
+            "9748064d1ea7868a982f8a5b161555f0",
+            "c774cb66aef9c4b85ffdc350781d80bf",
+            "ca5dd45e4df8248298b44ea2dd65477c",
+            "27a6127c6d3c14f43eefffd18084a5ef",
+            "924d8661af278cd78cd0cdff1fdd97d3",
+            "24db347e0c2b69f4fc988b9c05a1b2c6",
+            "f86f31dff0e0c318da5d785a18fa87ab",
+            "aa350614a7f786da62b767b85852a6ee",
+            "073b482493c12095e2a35ed32a5a5f25",
+            "480d86f835fcd1a0561c1879cd22e5bc",
+            "0fb7547e5f9053020dca0ca60d603b6a",
+            "e7f763f9e3420a2863dbded3dfe47231",
+            "19026628642864565b578327646f138d",
+            "c6b3a310fac9084609f81c21e103cb57",
+            "69f341956a3b1329836ff129a2a69950",
+            "c5bb33b8fa9f17f4392b726b0ddea446",
+            "2c7e12477a46dbb464e8964732f487e6"
+          ],
+          "exception_signatures": [
+            {
+              "type": "httpx.ReadTimeout",
+              "count": 5,
+              "message": "",
+              "signature": "31063049776395de"
+            }
+          ]
+        },
+        "created_at": "2026-11-19T17:20:17.827213Z",
+        "updated_at": "2026-11-19T17:26:17.830622Z"
+      },
+      "reasons": [
+        {
+          "type": "shared_trace",
+          "detail": "5 sample trace(s) have error spans on both sides",
+          "refs": [
+            "073b482493c12095e2a35ed32a5a5f25",
+            "0fb7547e5f9053020dca0ca60d603b6a",
+            "19026628642864565b578327646f138d",
+            "24db347e0c2b69f4fc988b9c05a1b2c6",
+            "27a6127c6d3c14f43eefffd18084a5ef"
+          ]
+        },
+        {
+          "type": "exception_signature",
+          "detail": "same exception signature",
+          "refs": [
+            "31063049776395de"
+          ]
+        },
+        {
+          "type": "dependency_edge",
+          "detail": "direct dependency edge to 1 incident service(s)",
+          "refs": [
+            {
+              "source": "declared",
+              "edge_id": "0521a564-b722-4bc3-bb0b-267aad16805b"
+            },
+            {
+              "source": "observed",
+              "edge_id": "950a99f3-8d7f-44bc-952f-25a102e25e9c"
+            }
+          ]
+        },
+        {
+          "type": "same_service",
+          "detail": "the incident already has a detection on this service",
+          "refs": [
+            "335bcaae-a304-4d99-a609-d970f8ec1010"
+          ]
+        }
+      ],
+      "score": 9,
+      "linked_at": "2026-11-19T17:20:17.827213Z"
+    },
+    {
+      "detection": {
+        "id": "8775eceb-208c-4c23-a203-c12e0c5be268",
+        "service_id": "e23db41e-1864-4992-8ee0-25947d02641f",
+        "rule": "latency_shift",
+        "severity": "critical",
+        "metric": "p95_ms",
+        "observed_value": 13523.858809399997,
+        "baseline_value": 76.14098225000001,
+        "threshold": 228.42294675000002,
+        "peak_value": 13523.858809399997,
+        "last_value": 76.4625914,
+        "started_at": "2026-11-19T17:17:45Z",
+        "fired_at": "2026-11-19T17:19:45Z",
+        "resolved_at": "2026-11-19T17:25:45Z",
+        "explanation": "order-service: p95 latency 13524 ms over 60 s ending 17:19:45Z (557 server requests), 177.6x the baseline of 76 ms (median per-minute p95 over the previous 30 min, 30 minutes); threshold 228 ms, held 120 s (fires after 120 s). Top exception: `sqlalchemy.exc.TimeoutError: QueuePool limit of size # overflow # reached, connection timed out, timeout # (Background \u2026` (421 spans). Sample traces: 8c639c5b\u2026, 24cffb00\u2026, d4bfe06e\u2026.",
+        "evidence": {
+          "facts": {
+            "p95_ms": 13523.858809399997,
+            "samples": 557,
+            "window_s": 60,
+            "baseline_minutes": 30
+          },
+          "params": {
+            "fire": 3.0,
+            "clear": 1.5,
+            "critical": 10.0,
+            "min_samples": 20,
+            "min_duration_s": 120,
+            "clear_duration_s": 120
+          },
+          "window": {
+            "end": "2026-11-19T17:19:45+00:00",
+            "start": "2026-11-19T17:18:45+00:00"
+          },
+          "sample_trace_ids": [
+            "8c639c5b9444940e055ea08bd9477652",
+            "24cffb009ceddb205c582f77cda17b1d",
+            "d4bfe06e66ad335df934a323e0bf7708",
+            "059e2aa3eef91a606a2882e2438942e2",
+            "88ec5fda61c376384ec768de2e8a9b23",
+            "587989740439401d8e0531bc4712ab6c",
+            "009a36725aac7047c7ef2132b87e8dc7",
+            "e1f7d88fc5461e9acc51c7443655a9e4",
+            "9ff24b7279e88a0c77aaa0f165f35953",
+            "e84e13c4279d37ecf0d933560a88d818",
+            "5b65171b26cf4698fa96480939a2dcbe",
+            "13bd77045974f21347acd4a9a8c8e066",
+            "aca5e1b67589dfadfbbf276f42525ed8",
+            "6d425216317cf30b338e06ba89a59999",
+            "55b9caf2c258d66d18807a8572797047",
+            "4c208ded3ca3ec26c2f52e9cb8dc4587",
+            "6cf484367312cce500f765907010f714",
+            "787cfa507be5145c4e045c8601001798",
+            "9cfdc17b4393335817f72613559db545",
+            "b4916d7a73fbc18d431cf3670ee5b461"
+          ],
+          "exception_signatures": [
+            {
+              "type": "sqlalchemy.exc.TimeoutError",
+              "count": 421,
+              "message": "QueuePool limit of size # overflow # reached, connection timed out, timeout # (Background on this error at: https://sqlalche.me/e/#/#o#r)",
+              "signature": "0932c907c6f49ec4"
+            },
+            {
+              "type": "shop.common.errors.ServiceUnavailableError",
+              "count": 420,
+              "message": "Timed out waiting for a database connection from the pool.",
+              "signature": "bed391ada71937b3"
+            }
+          ]
+        },
+        "created_at": "2026-11-19T17:20:17.827213Z",
+        "updated_at": "2026-11-19T17:26:17.830622Z"
+      },
+      "reasons": [
+        {
+          "type": "shared_trace",
+          "detail": "5 sample trace(s) have error spans on both sides",
+          "refs": [
+            "073b482493c12095e2a35ed32a5a5f25",
+            "0808e98f41a11719a91ff1fb857c130b",
+            "0947bdb58aca029069277242b2e77ef3",
+            "0a225879ea72956df1f26d60c9acde89",
+            "0a91e5699831854b83ce77bfbc66d047"
+          ]
+        },
+        {
+          "type": "exception_signature",
+          "detail": "same exception signature",
+          "refs": [
+            "0932c907c6f49ec4",
+            "bed391ada71937b3"
+          ]
+        },
+        {
+          "type": "dependency_edge",
+          "detail": "direct dependency edge to 1 incident service(s)",
+          "refs": [
+            {
+              "source": "declared",
+              "edge_id": "a87a99a0-d201-4a7a-a4ef-d71d8b24d411"
+            },
+            {
+              "source": "observed",
+              "edge_id": "48ea0b09-a79e-4ffe-be6b-9c2aeeba5ec9"
+            }
+          ]
+        },
+        {
+          "type": "same_service",
+          "detail": "the incident already has a detection on this service",
+          "refs": [
+            "979b3005-3bd8-49ab-8c3f-cf50b7988a08",
+            "a0ca9f4b-b1d9-4008-a7fe-583e3ff19dcb"
+          ]
+        }
+      ],
+      "score": 9,
+      "linked_at": "2026-11-19T17:20:17.827213Z"
+    },
+    {
+      "detection": {
+        "id": "8c636286-99a1-48a8-a818-1d2f2961aea3",
+        "service_id": "f4ff5bb9-442a-4b6f-8b55-4eddbc21e38e",
+        "rule": "latency_shift",
+        "severity": "critical",
+        "metric": "p95_ms",
+        "observed_value": 3092.8525326500003,
+        "baseline_value": 72.04511435,
+        "threshold": 216.13534305000002,
+        "peak_value": 3127.5670144,
+        "last_value": 73.36516759999992,
+        "started_at": "2026-11-19T17:17:45Z",
+        "fired_at": "2026-11-19T17:19:45Z",
+        "resolved_at": "2026-11-19T17:25:45Z",
+        "explanation": "api-gateway: p95 latency 3093 ms over 60 s ending 17:19:45Z (604 server requests), 42.9x the baseline of 72 ms (median per-minute p95 over the previous 30 min, 30 minutes); threshold 216 ms, held 120 s (fires after 120 s). Top exception: `shop.common.errors.UpstreamError: order-service returned #.` (231 spans). Sample traces: f6551da1\u2026, 9748064d\u2026, ee98808a\u2026.",
+        "evidence": {
+          "facts": {
+            "p95_ms": 3092.8525326500003,
+            "samples": 604,
+            "window_s": 60,
+            "baseline_minutes": 30
+          },
+          "params": {
+            "fire": 3.0,
+            "clear": 1.5,
+            "critical": 10.0,
+            "min_samples": 20,
+            "min_duration_s": 120,
+            "clear_duration_s": 120
+          },
+          "window": {
+            "end": "2026-11-19T17:19:45+00:00",
+            "start": "2026-11-19T17:18:45+00:00"
+          },
+          "sample_trace_ids": [
+            "f6551da1f828090d3489632ebaabd550",
+            "9748064d1ea7868a982f8a5b161555f0",
+            "ee98808af6f9cdad53d8099ca0ea5767",
+            "36e09ab1fc6ba0a8d76472d0abaea111",
+            "c774cb66aef9c4b85ffdc350781d80bf",
+            "ca5dd45e4df8248298b44ea2dd65477c",
+            "27a6127c6d3c14f43eefffd18084a5ef",
+            "924d8661af278cd78cd0cdff1fdd97d3",
+            "24db347e0c2b69f4fc988b9c05a1b2c6",
+            "f86f31dff0e0c318da5d785a18fa87ab",
+            "480d86f835fcd1a0561c1879cd22e5bc",
+            "aa350614a7f786da62b767b85852a6ee",
+            "073b482493c12095e2a35ed32a5a5f25",
+            "0fb7547e5f9053020dca0ca60d603b6a",
+            "19026628642864565b578327646f138d",
+            "e7f763f9e3420a2863dbded3dfe47231",
+            "c6b3a310fac9084609f81c21e103cb57",
+            "69f341956a3b1329836ff129a2a69950",
+            "c5bb33b8fa9f17f4392b726b0ddea446",
+            "ab165172728a5ee7f025ff7510b3a3b4"
+          ],
+          "exception_signatures": [
+            {
+              "type": "shop.common.errors.UpstreamError",
+              "count": 231,
+              "message": "order-service returned #.",
+              "signature": "f97ea8fcaa07f645"
+            },
+            {
+              "type": "httpx.ReadTimeout",
+              "count": 5,
+              "message": "",
+              "signature": "31063049776395de"
+            },
+            {
+              "type": "shop.common.errors.UpstreamError",
+              "count": 5,
+              "message": "order-service timed out.",
+              "signature": "3a83b5b805d259d0"
+            }
+          ]
+        },
+        "created_at": "2026-11-19T17:20:17.827213Z",
+        "updated_at": "2026-11-19T17:26:17.830622Z"
+      },
+      "reasons": [
+        {
+          "type": "shared_trace",
+          "detail": "5 sample trace(s) have error spans on both sides",
+          "refs": [
+            "073b482493c12095e2a35ed32a5a5f25",
+            "0fb7547e5f9053020dca0ca60d603b6a",
+            "19026628642864565b578327646f138d",
+            "24db347e0c2b69f4fc988b9c05a1b2c6",
+            "27a6127c6d3c14f43eefffd18084a5ef"
+          ]
+        },
+        {
+          "type": "exception_signature",
+          "detail": "same exception signature",
+          "refs": [
+            "31063049776395de",
+            "3a83b5b805d259d0",
+            "f97ea8fcaa07f645"
+          ]
+        },
+        {
+          "type": "dependency_edge",
+          "detail": "direct dependency edge to 2 incident service(s)",
+          "refs": [
+            {
+              "source": "declared",
+              "edge_id": "0521a564-b722-4bc3-bb0b-267aad16805b"
+            },
+            {
+              "source": "observed",
+              "edge_id": "950a99f3-8d7f-44bc-952f-25a102e25e9c"
+            },
+            {
+              "source": "declared",
+              "edge_id": "a87a99a0-d201-4a7a-a4ef-d71d8b24d411"
+            },
+            {
+              "source": "observed",
+              "edge_id": "48ea0b09-a79e-4ffe-be6b-9c2aeeba5ec9"
+            }
+          ]
+        },
+        {
+          "type": "same_service",
+          "detail": "the incident already has a detection on this service",
+          "refs": [
+            "c7826bc6-ab3d-4b2c-b0ba-639711ecea75"
+          ]
+        }
+      ],
+      "score": 9,
+      "linked_at": "2026-11-19T17:20:17.827213Z"
+    },
+    {
+      "detection": {
+        "id": "a0ca9f4b-b1d9-4008-a7fe-583e3ff19dcb",
+        "service_id": "e23db41e-1864-4992-8ee0-25947d02641f",
+        "rule": "error_rate",
+        "severity": "critical",
+        "metric": "error_ratio",
+        "observed_value": 0.805414551607445,
+        "baseline_value": null,
+        "threshold": 0.05,
+        "peak_value": 0.8156934306569343,
+        "last_value": 0.0,
+        "started_at": "2026-11-19T17:17:45Z",
+        "fired_at": "2026-11-19T17:18:45Z",
+        "resolved_at": "2026-11-19T17:25:45Z",
+        "explanation": "order-service: error rate 80.5% (476 of 591 server requests) over 60 s ending 17:18:45Z, above the 5.0% threshold for 60 s (fires after 60 s). Baseline over the previous 30 min: 0.0%. Top exception: `sqlalchemy.exc.TimeoutError: QueuePool limit of size # overflow # reached, connection timed out, timeout # (Background \u2026` (478 spans). Sample traces: 4968d8f8\u2026, 2908ddd4\u2026, df4d7f88\u2026.",
+        "evidence": {
+          "facts": {
+            "errors": 476,
+            "requests": 591,
+            "window_s": 60,
+            "baseline_ratio": 0.0
+          },
+          "params": {
+            "fire": 0.05,
+            "clear": 0.02,
+            "critical": 0.25,
+            "min_samples": 20,
+            "min_duration_s": 60,
+            "clear_duration_s": 120
+          },
+          "window": {
+            "end": "2026-11-19T17:18:45+00:00",
+            "start": "2026-11-19T17:17:45+00:00"
+          },
+          "sample_trace_ids": [
+            "4968d8f83e235a4b909a4f6eec49ecbd",
+            "2908ddd4ca929839856e234c56a88034",
+            "df4d7f886e90b7c469469be5b1ffb22b",
+            "34e0cc0ea4278d7ffea782b17d5f9389",
+            "1800d7e383b466a587fd3d70aa95a275",
+            "b41b410e289a8582a9b42f795e24998f",
+            "5a289d4bb6f780ee175a22e50f4e47cb",
+            "3edc2730322a9f439008facb406a7318",
+            "9c01c742ca658eea9de29813cc5196ed",
+            "dab8b84ebe989a35571d561a7f093efd",
+            "565ece8aa43af4cd39c78ec3fdf29ddb",
+            "eb9818a4bfb8d773eb78775262e6ff55",
+            "96e378b806648339b14651fd2f7b3444",
+            "9549c2c7f731f424f39ac3923a6e03c5",
+            "0a225879ea72956df1f26d60c9acde89",
+            "e14c479219d4454a6be1b84717f9dc84",
+            "8358fea5a1c0c1ad068314252af1fab5",
+            "472642234f41f0c2493ed34fcf131d88",
+            "868d3e39aa49adf7b5aa24d70081ddbe",
+            "7ef65f16688ffc6e5ac62d2ab01794f7"
+          ],
+          "exception_signatures": [
+            {
+              "type": "sqlalchemy.exc.TimeoutError",
+              "count": 478,
+              "message": "QueuePool limit of size # overflow # reached, connection timed out, timeout # (Background on this error at: https://sqlalche.me/e/#/#o#r)",
+              "signature": "0932c907c6f49ec4"
+            },
+            {
+              "type": "shop.common.errors.ServiceUnavailableError",
+              "count": 476,
+              "message": "Timed out waiting for a database connection from the pool.",
+              "signature": "bed391ada71937b3"
+            }
+          ]
+        },
+        "created_at": "2026-11-19T17:19:17.847181Z",
+        "updated_at": "2026-11-19T17:26:17.830622Z"
+      },
+      "reasons": [
+        {
+          "type": "shared_trace",
+          "detail": "5 sample trace(s) have error spans on both sides",
+          "refs": [
+            "0a225879ea72956df1f26d60c9acde89",
+            "1800d7e383b466a587fd3d70aa95a275",
+            "2908ddd4ca929839856e234c56a88034",
+            "34e0cc0ea4278d7ffea782b17d5f9389",
+            "3edc2730322a9f439008facb406a7318"
+          ]
+        },
+        {
+          "type": "exception_signature",
+          "detail": "same exception signature",
+          "refs": [
+            "0932c907c6f49ec4",
+            "bed391ada71937b3"
+          ]
+        },
+        {
+          "type": "same_service",
+          "detail": "the incident already has a detection on this service",
+          "refs": [
+            "979b3005-3bd8-49ab-8c3f-cf50b7988a08"
+          ]
+        }
+      ],
+      "score": 7,
+      "linked_at": "2026-11-19T17:19:17.847181Z"
+    },
+    {
+      "detection": {
+        "id": "335bcaae-a304-4d99-a609-d970f8ec1010",
+        "service_id": "88b7b02d-2154-49e4-a3d2-a3e32eab7bd2",
+        "rule": "error_rate",
+        "severity": "critical",
+        "metric": "error_ratio",
+        "observed_value": 0.4006568144499179,
+        "baseline_value": null,
+        "threshold": 0.05,
+        "peak_value": 0.46048109965635736,
+        "last_value": 0.0,
+        "started_at": "2026-11-19T17:18:00Z",
+        "fired_at": "2026-11-19T17:19:00Z",
+        "resolved_at": "2026-11-19T17:25:45Z",
+        "explanation": "frontend: error rate 40.1% (244 of 609 server requests) over 60 s ending 17:19:00Z, above the 5.0% threshold for 60 s (fires after 60 s). Baseline over the previous 30 min: 0.0%. Top exception: `httpx.ReadTimeout` (6 spans). Sample traces: 90850102\u2026, 1c028d18\u2026, 0808e98f\u2026.",
+        "evidence": {
+          "facts": {
+            "errors": 244,
+            "requests": 609,
+            "window_s": 60,
+            "baseline_ratio": 0.0
+          },
+          "params": {
+            "fire": 0.05,
+            "clear": 0.02,
+            "critical": 0.25,
+            "min_samples": 20,
+            "min_duration_s": 60,
+            "clear_duration_s": 120
+          },
+          "window": {
+            "end": "2026-11-19T17:19:00+00:00",
+            "start": "2026-11-19T17:18:00+00:00"
+          },
+          "sample_trace_ids": [
+            "9085010277b04d20a18b5b00d7c17c5d",
+            "1c028d18f785ba8c70412e97072c7b19",
+            "0808e98f41a11719a91ff1fb857c130b",
+            "0947bdb58aca029069277242b2e77ef3",
+            "804d2147d9bb3ac0433eedbe3f07b17c",
+            "92fabe0a515c052c175aee4382402a24",
+            "30c28110ba4380505977a5d013f2a13c",
+            "73d6a39c90f42d501678bc9b768863f4",
+            "70d6326d3ad69e4e18b8f65c64852e78",
+            "d797e85783efd11fcfa2ac3f27e68f20",
+            "278e3c2d7f10277ac7de0a2ebe3761d1",
+            "8c4d4689ed9d482b435474bd796a35b3",
+            "d685ed73add66bd79119f03e11d42825",
+            "fb8001572c49249e3c5e7031a3445dd4",
+            "c75ef0f2bcd4e3dbcfd38f1558796c57",
+            "ead74d29c6ef2e2ea2e05c85649d301e",
+            "4f61ab7ed724d59d5c204a914eeacdf9",
+            "52df179000ab63f3fd4a7d37aac51d17",
+            "2d2eb3d40b9a5f56e7a4728883e2786b",
+            "3f4a251ce3a67442e499234903440406"
+          ],
+          "exception_signatures": [
+            {
+              "type": "httpx.ReadTimeout",
+              "count": 6,
+              "message": "",
+              "signature": "31063049776395de"
+            }
+          ]
+        },
+        "created_at": "2026-11-19T17:19:32.841298Z",
+        "updated_at": "2026-11-19T17:26:17.830622Z"
+      },
+      "reasons": [
+        {
+          "type": "shared_trace",
+          "detail": "5 sample trace(s) have error spans on both sides",
+          "refs": [
+            "0808e98f41a11719a91ff1fb857c130b",
+            "0947bdb58aca029069277242b2e77ef3",
+            "1c028d18f785ba8c70412e97072c7b19",
+            "278e3c2d7f10277ac7de0a2ebe3761d1",
+            "2d2eb3d40b9a5f56e7a4728883e2786b"
+          ]
+        }
+      ],
+      "score": 3,
+      "linked_at": "2026-11-19T17:19:32.841298Z"
+    },
+    {
+      "detection": {
+        "id": "c7826bc6-ab3d-4b2c-b0ba-639711ecea75",
+        "service_id": "f4ff5bb9-442a-4b6f-8b55-4eddbc21e38e",
+        "rule": "error_rate",
+        "severity": "critical",
+        "metric": "error_ratio",
+        "observed_value": 0.4006568144499179,
+        "baseline_value": null,
+        "threshold": 0.05,
+        "peak_value": 0.46048109965635736,
+        "last_value": 0.0,
+        "started_at": "2026-11-19T17:18:00Z",
+        "fired_at": "2026-11-19T17:19:00Z",
+        "resolved_at": "2026-11-19T17:25:45Z",
+        "explanation": "api-gateway: error rate 40.1% (244 of 609 server requests) over 60 s ending 17:19:00Z, above the 5.0% threshold for 60 s (fires after 60 s). Baseline over the previous 30 min: 0.0%. Top exception: `shop.common.errors.UpstreamError: order-service returned #.` (239 spans). Sample traces: 90850102\u2026, 1c028d18\u2026, 0808e98f\u2026.",
+        "evidence": {
+          "facts": {
+            "errors": 244,
+            "requests": 609,
+            "window_s": 60,
+            "baseline_ratio": 0.0
+          },
+          "params": {
+            "fire": 0.05,
+            "clear": 0.02,
+            "critical": 0.25,
+            "min_samples": 20,
+            "min_duration_s": 60,
+            "clear_duration_s": 120
+          },
+          "window": {
+            "end": "2026-11-19T17:19:00+00:00",
+            "start": "2026-11-19T17:18:00+00:00"
+          },
+          "sample_trace_ids": [
+            "9085010277b04d20a18b5b00d7c17c5d",
+            "1c028d18f785ba8c70412e97072c7b19",
+            "0808e98f41a11719a91ff1fb857c130b",
+            "0947bdb58aca029069277242b2e77ef3",
+            "804d2147d9bb3ac0433eedbe3f07b17c",
+            "92fabe0a515c052c175aee4382402a24",
+            "30c28110ba4380505977a5d013f2a13c",
+            "73d6a39c90f42d501678bc9b768863f4",
+            "70d6326d3ad69e4e18b8f65c64852e78",
+            "d797e85783efd11fcfa2ac3f27e68f20",
+            "278e3c2d7f10277ac7de0a2ebe3761d1",
+            "fb8001572c49249e3c5e7031a3445dd4",
+            "8c4d4689ed9d482b435474bd796a35b3",
+            "d685ed73add66bd79119f03e11d42825",
+            "c75ef0f2bcd4e3dbcfd38f1558796c57",
+            "ead74d29c6ef2e2ea2e05c85649d301e",
+            "4f61ab7ed724d59d5c204a914eeacdf9",
+            "52df179000ab63f3fd4a7d37aac51d17",
+            "2d2eb3d40b9a5f56e7a4728883e2786b",
+            "3f4a251ce3a67442e499234903440406"
+          ],
+          "exception_signatures": [
+            {
+              "type": "shop.common.errors.UpstreamError",
+              "count": 239,
+              "message": "order-service returned #.",
+              "signature": "f97ea8fcaa07f645"
+            },
+            {
+              "type": "httpx.ReadTimeout",
+              "count": 5,
+              "message": "",
+              "signature": "31063049776395de"
+            },
+            {
+              "type": "shop.common.errors.UpstreamError",
+              "count": 5,
+              "message": "order-service timed out.",
+              "signature": "3a83b5b805d259d0"
+            }
+          ]
+        },
+        "created_at": "2026-11-19T17:19:32.841298Z",
+        "updated_at": "2026-11-19T17:26:17.830622Z"
+      },
+      "reasons": [
+        {
+          "type": "shared_trace",
+          "detail": "5 sample trace(s) have error spans on both sides",
+          "refs": [
+            "0808e98f41a11719a91ff1fb857c130b",
+            "0947bdb58aca029069277242b2e77ef3",
+            "1c028d18f785ba8c70412e97072c7b19",
+            "278e3c2d7f10277ac7de0a2ebe3761d1",
+            "2d2eb3d40b9a5f56e7a4728883e2786b"
+          ]
+        },
+        {
+          "type": "exception_signature",
+          "detail": "same exception signature",
+          "refs": [
+            "31063049776395de"
+          ]
+        },
+        {
+          "type": "dependency_edge",
+          "detail": "direct dependency edge to 2 incident service(s)",
+          "refs": [
+            {
+              "source": "declared",
+              "edge_id": "0521a564-b722-4bc3-bb0b-267aad16805b"
+            },
+            {
+              "source": "observed",
+              "edge_id": "950a99f3-8d7f-44bc-952f-25a102e25e9c"
+            },
+            {
+              "source": "declared",
+              "edge_id": "a87a99a0-d201-4a7a-a4ef-d71d8b24d411"
+            },
+            {
+              "source": "observed",
+              "edge_id": "48ea0b09-a79e-4ffe-be6b-9c2aeeba5ec9"
+            }
+          ]
+        }
+      ],
+      "score": 8,
+      "linked_at": "2026-11-19T17:19:32.841298Z"
+    }
+  ]
+}

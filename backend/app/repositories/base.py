@@ -1,7 +1,8 @@
 """Repository base classes.
 
 `TenantRepository` is the single enforcement point for tenant isolation (CLAUDE.md invariant 4):
-every query it builds is filtered by the `org_id` of the `TenantContext` it was constructed
+every query it builds is filtered by the `org_id` of the `TenantScope` (a user's `TenantContext`,
+or a `SystemScope` for background work) it was constructed
 with, and every row it creates is stamped with that `org_id`. Services never filter by org.
 """
 
@@ -21,7 +22,7 @@ from app.core.pagination import (
     decode_cursor,
     encode_cursor,
 )
-from app.core.tenancy import TenantContext
+from app.core.tenancy import TenantScope
 from app.db.base import Base
 
 
@@ -76,7 +77,7 @@ class TenantRepository[M: Base]:
         if model is not None and "org_id" not in model.__table__.c:
             raise TypeError(f"{cls.__name__}.model {model.__name__} has no org_id column")
 
-    def __init__(self, session: AsyncSession, ctx: TenantContext) -> None:
+    def __init__(self, session: AsyncSession, ctx: TenantScope) -> None:
         self.session = session
         self.ctx = ctx
 

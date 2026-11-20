@@ -29,6 +29,11 @@
   --pill-neutral-ink: #353736;
   --pill-negative-bg: #ffedea;
   --pill-negative-ink: #831c1e;
+  --warning: #a35c00;
+  --pill-warning-bg: #fff1dc;
+  --pill-warning-ink: #6b3d00;
+  --pill-positive-bg: #e3f4ea;
+  --pill-positive-ink: #14532f;
 
   --radius-sheet: 16px;
   --sheet-inset: 8px;
@@ -87,6 +92,12 @@
   --color-pill-neutral-ink: var(--pill-neutral-ink);
   --color-pill-negative: var(--pill-negative-bg);
   --color-pill-negative-ink: var(--pill-negative-ink);
+  --color-warning: var(--warning);
+  --color-positive: var(--positive);
+  --color-pill-warning: var(--pill-warning-bg);
+  --color-pill-warning-ink: var(--pill-warning-ink);
+  --color-pill-positive: var(--pill-positive-bg);
+  --color-pill-positive-ink: var(--pill-positive-ink);
 
   --font-sans: var(--font-plex-sans), system-ui, sans-serif;
   --font-mono: var(--font-plex-mono), ui-monospace, monospace;

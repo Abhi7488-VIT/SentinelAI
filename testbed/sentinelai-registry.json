@@ -1,0 +1,42 @@
+{
+  "_comment": "What an operator would register in SentinelAI for the shop: services, declared dependencies and deployment facts (container memory limits from docker-compose.yml). Applied by `make sentinel-connect` through SentinelAI's public API. Contains no scenario or fault information (ADR 0003).",
+  "project": {"name": "Shop", "slug": "shop", "description": "Testbed shop: five Python services"},
+  "environment": "testbed",
+  "services": [
+    {
+      "name": "frontend",
+      "description": "Server-rendered storefront; calls api-gateway",
+      "repo_path": "testbed/services/shop/frontend",
+      "memory_limit_bytes": 134217728,
+      "depends_on": ["api-gateway"]
+    },
+    {
+      "name": "api-gateway",
+      "description": "Routes /api/*, validates sessions, caches product lists",
+      "repo_path": "testbed/services/shop/api_gateway",
+      "memory_limit_bytes": 201326592,
+      "depends_on": ["user-service", "order-service"]
+    },
+    {
+      "name": "user-service",
+      "description": "Users, login, sessions",
+      "repo_path": "testbed/services/shop/user_service",
+      "memory_limit_bytes": 167772160,
+      "depends_on": ["postgresql:users", "redis:sessions"]
+    },
+    {
+      "name": "order-service",
+      "description": "Orders and reports",
+      "repo_path": "testbed/services/shop/order_service",
+      "memory_limit_bytes": 167772160,
+      "depends_on": ["payment-service", "postgresql:orders"]
+    },
+    {
+      "name": "payment-service",
+      "description": "Payment authorization",
+      "repo_path": "testbed/services/shop/payment_service",
+      "memory_limit_bytes": 167772160,
+      "depends_on": ["postgresql:payments"]
+    }
+  ]
+}

@@ -25,6 +25,9 @@ x-backend-env: &backend-env
   AUTH_RATE_LIMIT_ATTEMPTS: ${AUTH_RATE_LIMIT_ATTEMPTS:-10}
   AUTH_RATE_LIMIT_WINDOW_SECONDS: ${AUTH_RATE_LIMIT_WINDOW_SECONDS:-60}
   CORS_ORIGINS: ${CORS_ORIGINS:-["http://localhost:3000"]}
+  TELEMETRY_RETENTION_SPANS_DAYS: ${TELEMETRY_RETENTION_SPANS_DAYS:-3}
+  TELEMETRY_RETENTION_LOGS_DAYS: ${TELEMETRY_RETENTION_LOGS_DAYS:-3}
+  TELEMETRY_RETENTION_METRICS_DAYS: ${TELEMETRY_RETENTION_METRICS_DAYS:-7}
 
 x-backend-build: &backend-build
   context: ./backend
@@ -68,7 +71,8 @@ services:
   migrate:
     build: *backend-build
     image: sentinelai-backend:dev
-    command: ["alembic", "upgrade", "head"]
+    # Migrations, then create today's (and upcoming) telemetry partitions before anything ingests.
+    command: ["sh", "-c", "alembic upgrade head && python -m app.cli.telemetry_maintenance"]
     environment: *backend-env
     depends_on:
       postgres:
@@ -96,6 +100,37 @@ services:
       start_period: 15s
     restart: unless-stopped
 
+  # OTLP/HTTP receiver (Phase 3): same image, separate process so telemetry floods cannot starve
+  # the API. Bounded by its memory limit and the ingest queue cap (429/503 with Retry-After).
+  ingest:
+    build: *backend-build
+    image: sentinelai-backend:dev
+    command: ["uvicorn", "app.ingest_main:create_ingest_app", "--factory", "--host", "0.0.0.0", "--port", "8001", "--no-server-header"]
+    environment: *backend-env
+    ports:
+      - "127.0.0.1:8001:8001"
+    # Also on the shared network the testbed's Collector joins (testbed/docker-compose.sentinelai.yml).
+    networks:
+      default: {}
+      ingest:
+        aliases: [sentinelai-ingest]
+    mem_limit: 384m
+    memswap_limit: 384m
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 15s
+    restart: unless-stopped
+
   worker:
     build: *backend-build
     image: sentinelai-backend:dev
@@ -116,6 +151,43 @@ services:
       start_period: 30s
     restart: unless-stopped
 
+  # Ingest writer (Phase 3): consumes only the `ingest` queue, so telemetry writes never delay
+  # other background jobs. Idempotent; retries with backoff + jitter, then a capped dead-letter list.
+  ingest-writer:
+    build: *backend-build
+    image: sentinelai-backend:dev
+    command: ["celery", "-A", "app.worker.celery_app", "worker", "-Q", "ingest", "-n", "ingest@%h", "--loglevel=INFO", "--concurrency=2"]
+    environment: *backend-env
+    mem_limit: 512m
+    memswap_limit: 512m
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A app.worker.celery_app inspect ping -d ingest@$$HOSTNAME --timeout 10 | grep -q pong"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+
+  # Celery beat: periodic jobs (telemetry partition maintenance; Phase 3 adds detection ticks).
+  beat:
+    build: *backend-build
+    image: sentinelai-backend:dev
+    command: ["celery", "-A", "app.worker.celery_app", "beat", "--loglevel=INFO", "--schedule", "/tmp/celerybeat-schedule"]
+    environment: *backend-env
+    depends_on:
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
   frontend:
     build:
       context: ./frontend
@@ -134,6 +206,12 @@ services:
       retries: 6
       start_period: 20s
     restart: unless-stopped
+
+networks:
+  default: {}
+  # Created by this stack with a fixed name so the testbed can join it as an external network.
+  ingest:
+    name: sentinelai-ingest
 
 volumes:
   pgdata:

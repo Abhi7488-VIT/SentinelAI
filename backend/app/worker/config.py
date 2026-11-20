@@ -25,5 +25,27 @@ def configure_celery(app: Celery, settings: Settings) -> Celery:
         timezone="UTC",
         enable_utc=True,
         task_default_queue="default",
+        beat_schedule={
+            # Partitions are created days ahead, so a missed run or two is harmless.
+            "telemetry-maintain-partitions": {
+                "task": "telemetry.maintain_partitions",
+                "schedule": 600.0,
+                "options": {"expires": 540},
+            },
+            # Observed dependency edges over the last 2 min of spans (Phase 3 T6). Windows
+            # overlap, so a skipped or expired run loses nothing.
+            # Detection pipeline (Phase 3 T7/T8). A late tick is dropped, not queued up: the
+            # next one evaluates the next bucket, and timers measure real time.
+            "detection-tick": {
+                "task": "detection.tick",
+                "schedule": 15.0,
+                "options": {"expires": 14},
+            },
+            "graph-discover-edges": {
+                "task": "graph.discover_edges",
+                "schedule": 60.0,
+                "options": {"expires": 55},
+            },
+        },
     )
     return app

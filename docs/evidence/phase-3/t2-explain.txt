@@ -1,0 +1,267 @@
+# Phase 3 T2 — EXPLAIN (ANALYZE, BUFFERS) of the telemetry query patterns (plan §3.2).
+# Measured on this Codespace (4 cores, 15 GiB), 2026-11-19, Postgres 17 (compose), dev DB seeded with
+# 1,000,000 spans (200k traces x 5 services, last 6 h), 300,000 log records, 50 series x 1,440 points.
+# Seq Scans below are on empty partitions (0 rows / never executed) or the 50-row metric_series table.
+
+== Q1 rollup: server-span window stats for one service, 60 s window ==
+                                                                                                                        QUERY PLAN                                                                                                                        
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Aggregate (actual rows=1 loops=1)
+   Buffers: shared read=3
+   ->  Append (actual rows=0 loops=1)
+         Buffers: shared read=3
+         Subplans Removed: 3
+         ->  Index Scan using spans_p20261119_org_id_service_id_start_time_idx1 on spans_p20261119 spans_1 (actual rows=0 loops=1)
+               Index Cond: ((org_id = '00000000-0000-0000-0000-0000000000a1'::uuid) AND (service_id = '00000000-0000-0000-0000-000000000003'::uuid) AND (start_time >= (now() - '00:01:30'::interval)) AND (start_time < (now() - '00:00:30'::interval)))
+               Buffers: shared read=3
+ Planning:
+   Buffers: shared hit=608 read=13
+ Planning Time: 17.410 ms
+ Execution Time: 2.208 ms
+(12 rows)
+
+== Q2 graph: cross-service parent/child edges, last 2 min (per child service) ==
+== Q3 detection evidence: error spans of a service in a window ==
+ERROR:  function min(bytea) does not exist
+LINE 2: SELECT p.service_id, c.service_id, count(*), min(c.trace_id)
+                                                     ^
+HINT:  No function matches the given name and argument types. You might need to add explicit type casts.
+                                                                                                        QUERY PLAN                                                                                                        
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit (actual rows=20 loops=1)
+   Buffers: shared hit=1 read=22
+   ->  Append (actual rows=20 loops=1)
+         Buffers: shared hit=1 read=22
+         Subplans Removed: 1
+         ->  Index Scan using spans_p20261119_org_id_service_id_start_time_idx on spans_p20261119 spans_1 (actual rows=20 loops=1)
+               Index Cond: ((org_id = '00000000-0000-0000-0000-0000000000a1'::uuid) AND (service_id = '00000000-0000-0000-0000-000000000003'::uuid) AND (start_time >= (now() - '00:05:00'::interval)))
+               Buffers: shared hit=1 read=22
+         ->  Seq Scan on spans_p20261120 spans_2 (never executed)
+               Filter: ((org_id = '00000000-0000-0000-0000-0000000000a1'::uuid) AND (service_id = '00000000-0000-0000-0000-000000000003'::uuid) AND (status_code = 2) AND (start_time >= (now() - '00:05:00'::interval)))
+         ->  Seq Scan on spans_p20261121 spans_3 (never executed)
+               Filter: ((org_id = '00000000-0000-0000-0000-0000000000a1'::uuid) AND (service_id = '00000000-0000-0000-0000-000000000003'::uuid) AND (status_code = 2) AND (start_time >= (now() - '00:05:00'::interval)))
+ Planning:
+   Buffers: shared hit=62 read=1
+ Planning Time: 1.404 ms
+ Execution Time: 34.422 ms
+(16 rows)
+
+== Q4 logs of a service in a window ==
+                                                                                                       QUERY PLAN                                                                                                       
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Aggregate (actual rows=1 loops=1)
+   Buffers: shared hit=729
+   ->  Append (actual rows=0 loops=1)
+         Buffers: shared hit=729
+         Subplans Removed: 1
+         ->  Index Scan using log_records_p20261119_org_id_service_id_ts_idx on log_records_p20261119 log_records_1 (actual rows=0 loops=1)
+               Index Cond: ((org_id = '00000000-0000-0000-0000-0000000000a1'::uuid) AND (service_id = '00000000-0000-0000-0000-000000000003'::uuid) AND (ts >= (now() - '00:05:00'::interval)))
+               Filter: (severity_number >= 17)
+               Rows Removed by Filter: 719
+               Buffers: shared hit=729
+         ->  Seq Scan on log_records_p20261120 log_records_2 (actual rows=0 loops=1)
+               Filter: ((severity_number >= 17) AND (org_id = '00000000-0000-0000-0000-0000000000a1'::uuid) AND (service_id = '00000000-0000-0000-0000-000000000003'::uuid) AND (ts >= (now() - '00:05:00'::interval)))
+         ->  Seq Scan on log_records_p20261121 log_records_3 (actual rows=0 loops=1)
+               Filter: ((severity_number >= 17) AND (org_id = '00000000-0000-0000-0000-0000000000a1'::uuid) AND (service_id = '00000000-0000-0000-0000-000000000003'::uuid) AND (ts >= (now() - '00:05:00'::interval)))
+ Planning:
+   Buffers: shared hit=397
+ Planning Time: 3.892 ms
+ Execution Time: 3.214 ms
+(18 rows)
+
+== Q5 logs of a trace ==
+                                                                 QUERY PLAN                                                                 
+--------------------------------------------------------------------------------------------------------------------------------------------
+ Append (actual rows=2 loops=1)
+   Buffers: shared hit=5
+   ->  Seq Scan on log_records_p20261118 log_records_1 (actual rows=0 loops=1)
+         Filter: ((org_id = '00000000-0000-0000-0000-0000000000a1'::uuid) AND (trace_id = '\x6f700379d78b358cd6a9ed3ea21966ca'::bytea))
+   ->  Index Scan using log_records_p20261119_org_id_trace_id_idx on log_records_p20261119 log_records_2 (actual rows=2 loops=1)
+         Index Cond: ((org_id = '00000000-0000-0000-0000-0000000000a1'::uuid) AND (trace_id = '\x6f700379d78b358cd6a9ed3ea21966ca'::bytea))
+         Buffers: shared hit=5
+   ->  Seq Scan on log_records_p20261120 log_records_3 (actual rows=0 loops=1)
+         Filter: ((org_id = '00000000-0000-0000-0000-0000000000a1'::uuid) AND (trace_id = '\x6f700379d78b358cd6a9ed3ea21966ca'::bytea))
+   ->  Seq Scan on log_records_p20261121 log_records_4 (actual rows=0 loops=1)
+         Filter: ((org_id = '00000000-0000-0000-0000-0000000000a1'::uuid) AND (trace_id = '\x6f700379d78b358cd6a9ed3ea21966ca'::bytea))
+ Planning:
+   Buffers: shared hit=34
+ Planning Time: 0.748 ms
+ Execution Time: 0.088 ms
+(15 rows)
+
+== Q6 spans of a trace (primary key prefix) ==
+                                                                 QUERY PLAN                                                                 
+--------------------------------------------------------------------------------------------------------------------------------------------
+ Append (actual rows=5 loops=1)
+   Buffers: shared read=8
+   ->  Seq Scan on spans_p20261118 spans_1 (actual rows=0 loops=1)
+         Filter: ((org_id = '00000000-0000-0000-0000-0000000000a1'::uuid) AND (trace_id = '\x6f700379d78b358cd6a9ed3ea21966ca'::bytea))
+   ->  Index Scan using spans_p20261119_pkey on spans_p20261119 spans_2 (actual rows=5 loops=1)
+         Index Cond: ((org_id = '00000000-0000-0000-0000-0000000000a1'::uuid) AND (trace_id = '\x6f700379d78b358cd6a9ed3ea21966ca'::bytea))
+         Buffers: shared read=8
+   ->  Seq Scan on spans_p20261120 spans_3 (actual rows=0 loops=1)
+         Filter: ((org_id = '00000000-0000-0000-0000-0000000000a1'::uuid) AND (trace_id = '\x6f700379d78b358cd6a9ed3ea21966ca'::bytea))
+   ->  Seq Scan on spans_p20261121 spans_4 (actual rows=0 loops=1)
+         Filter: ((org_id = '00000000-0000-0000-0000-0000000000a1'::uuid) AND (trace_id = '\x6f700379d78b358cd6a9ed3ea21966ca'::bytea))
+ Planning:
+   Buffers: shared hit=18
+ Planning Time: 0.382 ms
+ Execution Time: 2.772 ms
+(15 rows)
+
+== Q7 series of a service by metric name, then its points in a window ==
+                                                                                   QUERY PLAN                                                                                    
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Nested Loop (actual rows=18 loops=1)
+   Buffers: shared hit=5
+   ->  Seq Scan on metric_series s (actual rows=1 loops=1)
+         Filter: ((org_id = '00000000-0000-0000-0000-0000000000a1'::uuid) AND (service_id = '00000000-0000-0000-0000-000000000003'::uuid) AND ((name)::text = 'metric.2'::text))
+         Rows Removed by Filter: 49
+         Buffers: shared hit=1
+   ->  Append (actual rows=18 loops=1)
+         Buffers: shared hit=4
+         Subplans Removed: 1
+         ->  Index Scan using metric_points_p20261119_pkey on metric_points_p20261119 p_1 (actual rows=18 loops=1)
+               Index Cond: ((org_id = '00000000-0000-0000-0000-0000000000a1'::uuid) AND (series_id = s.id) AND (ts >= (now() - '00:05:00'::interval)))
+               Buffers: shared hit=4
+         ->  Seq Scan on metric_points_p20261120 p_2 (actual rows=0 loops=1)
+               Filter: ((org_id = '00000000-0000-0000-0000-0000000000a1'::uuid) AND (series_id = s.id) AND (ts >= (now() - '00:05:00'::interval)))
+         ->  Seq Scan on metric_points_p20261121 p_3 (actual rows=0 loops=1)
+               Filter: ((org_id = '00000000-0000-0000-0000-0000000000a1'::uuid) AND (series_id = s.id) AND (ts >= (now() - '00:05:00'::interval)))
+ Planning:
+   Buffers: shared hit=405
+ Planning Time: 3.506 ms
+ Execution Time: 0.108 ms
+(20 rows)
+
+
+######## Re-run of Q1/Q2 with windows anchored to the newest seeded span (the first Q1 window
+######## started after the seed time and saw 0 rows; the first Q2 failed: min(bytea) does not exist).
+######## Default settings (JIT on):
+== Q1 (anchored to newest seeded span) rollup: server-span window stats, one service, 60 s ==
+                                                                                                                                                                            QUERY PLAN                                                                                                                                                                            
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Aggregate (actual rows=1 loops=1)
+   Buffers: shared hit=559
+   ->  Append (actual rows=543 loops=1)
+         Buffers: shared hit=551
+         Subplans Removed: 3
+         ->  Index Scan using spans_p20261119_org_id_service_id_start_time_idx1 on spans_p20261119 spans_1 (actual rows=543 loops=1)
+               Index Cond: ((org_id = '00000000-0000-0000-0000-0000000000a1'::uuid) AND (service_id = '00000000-0000-0000-0000-000000000003'::uuid) AND (start_time >= ('2026-11-19 10:58:48.992599+00'::timestamp with time zone - '00:01:30'::interval)) AND (start_time < ('2026-11-19 10:58:48.992599+00'::timestamp with time zone - '00:00:30'::interval)))
+               Buffers: shared hit=551
+ Planning:
+   Buffers: shared hit=102
+ Planning Time: 1.223 ms
+ Execution Time: 0.982 ms
+(12 rows)
+
+== Q2 (anchored) graph: cross-service parent/child edges into one service, 2 min ==
+                                                                                                                                               QUERY PLAN                                                                                                                                               
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ GroupAggregate (actual rows=1 loops=1)
+   Group Key: p.service_id
+   Buffers: shared hit=3014 read=2565
+   ->  Sort (actual rows=1104 loops=1)
+         Sort Key: p.service_id
+         Sort Method: quicksort  Memory: 126kB
+         Buffers: shared hit=3014 read=2565
+         ->  Gather (actual rows=1104 loops=1)
+               Workers Planned: 2
+               Workers Launched: 2
+               Buffers: shared hit=3011 read=2565
+               ->  Nested Loop (actual rows=368 loops=3)
+                     Buffers: shared hit=3011 read=2565
+                     ->  Parallel Append (actual rows=368 loops=3)
+                           Buffers: shared hit=699 read=459
+                           Subplans Removed: 1
+                           ->  Seq Scan on spans_p20261120 c_2 (actual rows=0 loops=1)
+                                 Filter: ((org_id = '00000000-0000-0000-0000-0000000000a1'::uuid) AND (service_id = '00000000-0000-0000-0000-000000000003'::uuid) AND (kind = 2) AND (start_time >= ('2026-11-19 10:58:48.992599+00'::timestamp with time zone - '00:02:00'::interval)))
+                                 Buffers: shared hit=20
+                           ->  Seq Scan on spans_p20261121 c_3 (actual rows=0 loops=1)
+                                 Filter: ((org_id = '00000000-0000-0000-0000-0000000000a1'::uuid) AND (service_id = '00000000-0000-0000-0000-000000000003'::uuid) AND (kind = 2) AND (start_time >= ('2026-11-19 10:58:48.992599+00'::timestamp with time zone - '00:02:00'::interval)))
+                                 Buffers: shared hit=20
+                           ->  Parallel Index Scan using spans_p20261119_org_id_service_id_start_time_idx1 on spans_p20261119 c_1 (actual rows=368 loops=3)
+                                 Index Cond: ((org_id = '00000000-0000-0000-0000-0000000000a1'::uuid) AND (service_id = '00000000-0000-0000-0000-000000000003'::uuid) AND (start_time >= ('2026-11-19 10:58:48.992599+00'::timestamp with time zone - '00:02:00'::interval)))
+                                 Buffers: shared hit=659 read=459
+                     ->  Append (actual rows=1 loops=1104)
+                           Buffers: shared hit=2312 read=2106
+                           Subplans Removed: 1
+                           ->  Index Scan using spans_p20261119_pkey on spans_p20261119 p_1 (actual rows=1 loops=1104)
+                                 Index Cond: ((org_id = '00000000-0000-0000-0000-0000000000a1'::uuid) AND (trace_id = c.trace_id) AND (span_id = c.parent_span_id) AND (start_time >= ('2026-11-19 10:58:48.992599+00'::timestamp with time zone - '00:10:00'::interval)))
+                                 Filter: (service_id <> c.service_id)
+                                 Buffers: shared hit=2312 read=2106
+                           ->  Seq Scan on spans_p20261120 p_2 (actual rows=0 loops=1104)
+                                 Filter: ((org_id = '00000000-0000-0000-0000-0000000000a1'::uuid) AND (service_id <> c.service_id) AND (c.trace_id = trace_id) AND (c.parent_span_id = span_id) AND (start_time >= ('2026-11-19 10:58:48.992599+00'::timestamp with time zone - '00:10:00'::interval)))
+                           ->  Seq Scan on spans_p20261121 p_3 (actual rows=0 loops=1104)
+                                 Filter: ((org_id = '00000000-0000-0000-0000-0000000000a1'::uuid) AND (service_id <> c.service_id) AND (c.trace_id = trace_id) AND (c.parent_span_id = span_id) AND (start_time >= ('2026-11-19 10:58:48.992599+00'::timestamp with time zone - '00:10:00'::interval)))
+ Planning:
+   Buffers: shared hit=189 read=1
+ Planning Time: 2.333 ms
+ Execution Time: 733.224 ms
+(40 rows)
+
+
+######## Same queries with SET jit = off:
+SET
+== Q1 (anchored to newest seeded span) rollup: server-span window stats, one service, 60 s ==
+                                                                                                                                                                            QUERY PLAN                                                                                                                                                                            
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Aggregate (actual rows=1 loops=1)
+   Buffers: shared hit=559
+   ->  Append (actual rows=543 loops=1)
+         Buffers: shared hit=551
+         Subplans Removed: 3
+         ->  Index Scan using spans_p20261119_org_id_service_id_start_time_idx1 on spans_p20261119 spans_1 (actual rows=543 loops=1)
+               Index Cond: ((org_id = '00000000-0000-0000-0000-0000000000a1'::uuid) AND (service_id = '00000000-0000-0000-0000-000000000003'::uuid) AND (start_time >= ('2026-11-19 10:58:48.992599+00'::timestamp with time zone - '00:01:30'::interval)) AND (start_time < ('2026-11-19 10:58:48.992599+00'::timestamp with time zone - '00:00:30'::interval)))
+               Buffers: shared hit=551
+ Planning:
+   Buffers: shared hit=102
+ Planning Time: 1.208 ms
+ Execution Time: 0.890 ms
+(12 rows)
+
+== Q2 (anchored) graph: cross-service parent/child edges into one service, 2 min ==
+                                                                                                                                               QUERY PLAN                                                                                                                                               
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ GroupAggregate (actual rows=1 loops=1)
+   Group Key: p.service_id
+   Buffers: shared hit=5579
+   ->  Sort (actual rows=1104 loops=1)
+         Sort Key: p.service_id
+         Sort Method: quicksort  Memory: 126kB
+         Buffers: shared hit=5579
+         ->  Gather (actual rows=1104 loops=1)
+               Workers Planned: 2
+               Workers Launched: 2
+               Buffers: shared hit=5576
+               ->  Nested Loop (actual rows=368 loops=3)
+                     Buffers: shared hit=5576
+                     ->  Parallel Append (actual rows=368 loops=3)
+                           Buffers: shared hit=1138
+                           Subplans Removed: 1
+                           ->  Seq Scan on spans_p20261120 c_2 (actual rows=0 loops=1)
+                                 Filter: ((org_id = '00000000-0000-0000-0000-0000000000a1'::uuid) AND (service_id = '00000000-0000-0000-0000-000000000003'::uuid) AND (kind = 2) AND (start_time >= ('2026-11-19 10:58:48.992599+00'::timestamp with time zone - '00:02:00'::interval)))
+                                 Buffers: shared hit=20
+                           ->  Seq Scan on spans_p20261121 c_3 (actual rows=0 loops=1)
+                                 Filter: ((org_id = '00000000-0000-0000-0000-0000000000a1'::uuid) AND (service_id = '00000000-0000-0000-0000-000000000003'::uuid) AND (kind = 2) AND (start_time >= ('2026-11-19 10:58:48.992599+00'::timestamp with time zone - '00:02:00'::interval)))
+                           ->  Parallel Index Scan using spans_p20261119_org_id_service_id_start_time_idx1 on spans_p20261119 c_1 (actual rows=368 loops=3)
+                                 Index Cond: ((org_id = '00000000-0000-0000-0000-0000000000a1'::uuid) AND (service_id = '00000000-0000-0000-0000-000000000003'::uuid) AND (start_time >= ('2026-11-19 10:58:48.992599+00'::timestamp with time zone - '00:02:00'::interval)))
+                                 Buffers: shared hit=1118
+                     ->  Append (actual rows=1 loops=1104)
+                           Buffers: shared hit=4438
+                           Subplans Removed: 1
+                           ->  Index Scan using spans_p20261119_pkey on spans_p20261119 p_1 (actual rows=1 loops=1104)
+                                 Index Cond: ((org_id = '00000000-0000-0000-0000-0000000000a1'::uuid) AND (trace_id = c.trace_id) AND (span_id = c.parent_span_id) AND (start_time >= ('2026-11-19 10:58:48.992599+00'::timestamp with time zone - '00:10:00'::interval)))
+                                 Filter: (service_id <> c.service_id)
+                                 Buffers: shared hit=4418
+                           ->  Seq Scan on spans_p20261120 p_2 (actual rows=0 loops=1104)
+                                 Filter: ((org_id = '00000000-0000-0000-0000-0000000000a1'::uuid) AND (service_id <> c.service_id) AND (c.trace_id = trace_id) AND (c.parent_span_id = span_id) AND (start_time >= ('2026-11-19 10:58:48.992599+00'::timestamp with time zone - '00:10:00'::interval)))
+                                 Buffers: shared hit=20
+                           ->  Seq Scan on spans_p20261121 p_3 (actual rows=0 loops=1104)
+                                 Filter: ((org_id = '00000000-0000-0000-0000-0000000000a1'::uuid) AND (service_id <> c.service_id) AND (c.trace_id = trace_id) AND (c.parent_span_id = span_id) AND (start_time >= ('2026-11-19 10:58:48.992599+00'::timestamp with time zone - '00:10:00'::interval)))
+ Planning:
+   Buffers: shared hit=190
+ Planning Time: 2.164 ms
+ Execution Time: 15.596 ms
+(40 rows)
+

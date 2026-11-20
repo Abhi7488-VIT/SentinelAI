@@ -57,6 +57,14 @@ class ConflictError(AppError):
     message = "The request conflicts with the current state."
 
 
+class InvalidRequestError(AppError):
+    """Well-formed input that is semantically invalid (e.g. a dependency on itself)."""
+
+    status_code = 422
+    code = "invalid_request"
+    message = "The request is invalid."
+
+
 class RateLimitedError(AppError):
     status_code = 429
     code = "rate_limited"

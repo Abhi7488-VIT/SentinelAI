@@ -1,0 +1,93 @@
+== detections created in the window (+60 s for the 30 s evaluation lag)
+ name | rule | severity | started_at | fired_at | explanation 
+------+------+----------+------------+----------+-------------
+(0 rows)
+
+== detections with started_at in the window (any created_at)
+ count 
+-------
+     0
+(1 row)
+
+== detections total (all time; 7 are from S1 run 20261119T171535Z-e076ed)
+ count 
+-------
+     7
+(1 row)
+
+== incidents created in the window (+60 s)
+ number | title | severity | status | created_at 
+--------+-------+----------+--------+------------
+(0 rows)
+
+== incidents total (all time; #1 is from S1 run 20261119T171535Z-e076ed)
+ count 
+-------
+     1
+(1 row)
+
+== per service over the window's evaluation buckets: traffic and headroom to thresholds
+      name       | buckets | requests | errors | min_req_60s | max_err_ratio_60s | max_p95_60s_ms | median_p95_60s_ms 
+-----------------+---------+----------+--------+-------------+-------------------+----------------+-------------------
+ api-gateway     |      40 |     5972 |      0 |         550 |            0.0000 |           79.2 |              70.5
+ frontend        |      40 |     5972 |      0 |         550 |            0.0000 |           82.9 |              75.1
+ order-service   |      40 |     2777 |      0 |         241 |            0.0000 |           77.5 |              74.8
+ payment-service |      40 |      592 |      0 |          45 |            0.0000 |           67.8 |              65.6
+ user-service    |      40 |     2726 |      0 |         246 |            0.0000 |            6.9 |               5.1
+(5 rows)
+
+== exception signatures seen in the window
+ name | type | message | spans 
+------+------+---------+-------
+(0 rows)
+
+== detector states now
+      name       |        rule         | state | last_cond | last_value 
+-----------------+---------------------+-------+-----------+------------
+ api-gateway     | error_rate          | ok    | clear     |     0.0000
+ api-gateway     | health_check        | ok    | clear     |     0.0000
+ api-gateway     | latency_shift       | ok    | clear     |    75.2433
+ api-gateway     | resource_saturation | ok    | clear     |     0.4257
+ frontend        | error_rate          | ok    | clear     |     0.0000
+ frontend        | health_check        | ok    | clear     |     0.0000
+ frontend        | latency_shift       | ok    | clear     |    79.7286
+ frontend        | resource_saturation | ok    | clear     |     0.6356
+ order-service   | error_rate          | ok    | clear     |     0.0000
+ order-service   | health_check        | ok    | clear     |     0.0000
+ order-service   | latency_shift       | ok    | clear     |    75.6064
+ order-service   | resource_saturation | ok    | clear     |     0.0000
+ payment-service | error_rate          | ok    | clear     |     0.0000
+ payment-service | health_check        | ok    | clear     |     0.0000
+ payment-service | latency_shift       | ok    | clear     |    67.8507
+ payment-service | resource_saturation | ok    | clear     |     0.0000
+ user-service    | error_rate          | ok    | clear     |     0.0000
+ user-service    | health_check        | ok    | clear     |     0.0000
+ user-service    | latency_shift       | ok    | clear     |     5.3784
+ user-service    | resource_saturation | ok    | clear     |     0.0000
+(20 rows)
+
+== latency headroom at window end: baseline = median per-minute p95 over the 30 min before
+   the last 60-s window (minutes with >= 20 requests); fire threshold = max(3x, +100 ms)
+      name       | baseline_minutes | baseline_ms | fire_ms | window_max_p95_ms | fraction_of_threshold 
+-----------------+------------------+-------------+---------+-------------------+-----------------------
+ api-gateway     |               30 |        70.6 |   211.8 |              79.2 |                  0.37
+ frontend        |               30 |        74.6 |   223.7 |              82.9 |                  0.37
+ order-service   |               30 |        73.0 |   219.1 |              77.5 |                  0.35
+ payment-service |               30 |        65.3 |   196.0 |              67.8 |                  0.35
+ user-service    |               30 |         5.0 |   105.0 |               6.9 |                  0.07
+(5 rows)
+
+== DB pool headroom in the window (max used/max, max pending; fire needs >= 0.9 AND pending > 0)
+      name       | max_used | pool_max | max_pending 
+-----------------+----------+----------+-------------
+ order-service   |        2 |       10 |           1
+ payment-service |        0 |        5 |           0
+ user-service    |        0 |        5 |           0
+(3 rows)
+
+== instances first seen in the window (crash loop needs >= 3 in 5 min)
+ count 
+-------
+     0
+(1 row)
+
