@@ -1,0 +1,127 @@
+{
+  "label": "measured on this machine; the testbed kept sending its own telemetry",
+  "measured_at": "2026-11-20T00:31:57+00:00",
+  "commit": "701056e958bfab07ca11dcbfb555b196ba088cf5",
+  "dirty": true,
+  "machine": {
+    "cpus": 4,
+    "cpu_model": "AMD EPYC 7763 64-Core Processor",
+    "mem_gib": 15.6,
+    "kernel": "6.8.0-1070-azure",
+    "python": "3.12.16"
+  },
+  "setup": {
+    "batch_records": 1000,
+    "encoding": "protobuf, identity (no gzip)",
+    "signals": "alternating traces and logs batches",
+    "keys": "one service + key per sender",
+    "seconds_per_level": 30,
+    "writer": "ingest-writer container (Celery, ingest queue)"
+  },
+  "levels": [
+    {
+      "senders": 1,
+      "send_seconds": 32.9,
+      "status_codes": {
+        "200": 113,
+        "503": 5
+      },
+      "client_errors": {},
+      "accepted_records": 113000,
+      "accepted_by_signal": {
+        "traces": 57000,
+        "logs": 56000
+      },
+      "rows_written": 113000,
+      "all_rows_written": true,
+      "seconds_until_last_row": 47.7,
+      "sustained_records_per_s": 2370,
+      "sustained_spans_per_s": 1195,
+      "client_build_seconds": 1.4
+    },
+    {
+      "senders": 4,
+      "send_seconds": 33.4,
+      "status_codes": {
+        "200": 114,
+        "503": 20
+      },
+      "client_errors": {},
+      "accepted_records": 114000,
+      "accepted_by_signal": {
+        "traces": 57000,
+        "logs": 57000
+      },
+      "rows_written": 114000,
+      "all_rows_written": true,
+      "seconds_until_last_row": 57.4,
+      "sustained_records_per_s": 1987,
+      "sustained_spans_per_s": 994,
+      "client_build_seconds": 2.0
+    },
+    {
+      "senders": 8,
+      "send_seconds": 31.9,
+      "status_codes": {
+        "200": 110,
+        "503": 40
+      },
+      "client_errors": {},
+      "accepted_records": 110000,
+      "accepted_by_signal": {
+        "traces": 58000,
+        "logs": 52000
+      },
+      "rows_written": 110000,
+      "all_rows_written": true,
+      "seconds_until_last_row": 58.0,
+      "sustained_records_per_s": 1896,
+      "sustained_spans_per_s": 1000,
+      "client_build_seconds": 2.0
+    }
+  ],
+  "malformed": {
+    "undecodable_body": {
+      "status": 400,
+      "body": {
+        "error": {
+          "code": "malformed_payload",
+          "message": "The OTLP payload could not be decoded.",
+          "request_id": "4eefd6e49088419fa752e5ea1f1eb31d"
+        }
+      }
+    },
+    "three_invalid_of_ten": {
+      "status": 200,
+      "body": {
+        "partial_success": {
+          "rejected_spans": 3,
+          "error_message": "rejected: invalid_trace_id=3"
+        }
+      }
+    },
+    "ingest_records_total_rejected_delta": {
+      "outcome=\"rejected\",reason=\"malformed_payload\",signal=\"traces\"": 1.0,
+      "outcome=\"rejected\",reason=\"invalid_trace_id\",signal=\"traces\"": 3.0
+    },
+    "ingest_usage_api": [
+      {
+        "minute": "2026-11-20T00:31:00Z",
+        "accepted": {
+          "traces": 7,
+          "logs": 0,
+          "metrics": 0
+        },
+        "rejected": {
+          "traces": 4,
+          "logs": 0,
+          "metrics": 0
+        },
+        "rejected_by_reason": {
+          "invalid_trace_id": 3,
+          "malformed_payload": 1
+        }
+      }
+    ]
+  }
+}

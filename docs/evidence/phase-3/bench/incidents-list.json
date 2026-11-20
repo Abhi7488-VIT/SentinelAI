@@ -1,0 +1,163 @@
+{
+  "label": "measured on this machine; other containers (testbed, ingest) were running",
+  "measured_at": "2026-11-20T00:07:20+00:00",
+  "commit": "701056e958bfab07ca11dcbfb555b196ba088cf5",
+  "dirty": true,
+  "machine": {
+    "cpus": 4,
+    "cpu_model": "AMD EPYC 7763 64-Core Processor",
+    "mem_gib": 15.6,
+    "kernel": "6.8.0-1070-azure",
+    "python": "3.12.16"
+  },
+  "target": {
+    "api": "http://127.0.0.1:8000",
+    "server": "backend container: one uvicorn process, DB pool from DB_POOL_SIZE",
+    "client": "sequential, one keep-alive connection, 20 warm-up requests per filter",
+    "page_size": 50
+  },
+  "dataset": {
+    "incidents": 50000,
+    "by_status": {
+      "investigating": 5000,
+      "open": 5000,
+      "resolved": 40000
+    },
+    "services": 20,
+    "services_per_incident": 2,
+    "seed_seconds": 17.1,
+    "kept": false
+  },
+  "results": {
+    "no_filter": {
+      "params": {},
+      "items_per_page": 50,
+      "requests": 1000,
+      "non_200": 0,
+      "p50_ms": 11.15,
+      "p95_ms": 20.56,
+      "p99_ms": 31.53,
+      "mean_ms": 12.85,
+      "max_ms": 86.82
+    },
+    "status_open": {
+      "params": {
+        "status": "open"
+      },
+      "items_per_page": 50,
+      "requests": 1000,
+      "non_200": 0,
+      "p50_ms": 11.84,
+      "p95_ms": 32.37,
+      "p99_ms": 65.35,
+      "mean_ms": 14.83,
+      "max_ms": 87.81
+    },
+    "severity_critical": {
+      "params": {
+        "severity": "critical"
+      },
+      "items_per_page": 50,
+      "requests": 1000,
+      "non_200": 0,
+      "p50_ms": 11.33,
+      "p95_ms": 19.92,
+      "p99_ms": 28.61,
+      "mean_ms": 12.86,
+      "max_ms": 139.0
+    },
+    "status_resolved_severity_critical": {
+      "params": {
+        "status": "resolved",
+        "severity": "critical"
+      },
+      "items_per_page": 50,
+      "requests": 1000,
+      "non_200": 0,
+      "p50_ms": 11.7,
+      "p95_ms": 24.33,
+      "p99_ms": 40.79,
+      "mean_ms": 13.85,
+      "max_ms": 80.42
+    },
+    "project": {
+      "params": {
+        "project_id": "97de62a7-9bf4-4ea2-ba60-fe0763ead267"
+      },
+      "items_per_page": 50,
+      "requests": 1000,
+      "non_200": 0,
+      "p50_ms": 11.81,
+      "p95_ms": 21.92,
+      "p99_ms": 43.96,
+      "mean_ms": 13.67,
+      "max_ms": 91.69
+    },
+    "service": {
+      "params": {
+        "service_id": "004e784f-a118-4fa3-bbc7-0dec52aca9d3"
+      },
+      "items_per_page": 50,
+      "requests": 1000,
+      "non_200": 0,
+      "p50_ms": 13.89,
+      "p95_ms": 32.04,
+      "p99_ms": 56.4,
+      "mean_ms": 16.94,
+      "max_ms": 74.54
+    },
+    "time_range_1_day": {
+      "params": {
+        "from": "2026-11-09T00:04:08.928801+00:00",
+        "to": "2026-11-10T00:04:08.928801+00:00"
+      },
+      "items_per_page": 50,
+      "requests": 1000,
+      "non_200": 0,
+      "p50_ms": 11.66,
+      "p95_ms": 24.71,
+      "p99_ms": 44.86,
+      "mean_ms": 13.77,
+      "max_ms": 73.59
+    },
+    "search_title": {
+      "params": {
+        "q": "Latency shift in svc-07"
+      },
+      "items_per_page": 50,
+      "requests": 1000,
+      "non_200": 0,
+      "p50_ms": 11.53,
+      "p95_ms": 21.6,
+      "p99_ms": 33.42,
+      "mean_ms": 13.25,
+      "max_ms": 111.44
+    },
+    "search_title_no_match": {
+      "params": {
+        "q": "saturation in svc-07"
+      },
+      "items_per_page": 0,
+      "requests": 1000,
+      "non_200": 0,
+      "p50_ms": 55.32,
+      "p95_ms": 93.58,
+      "p99_ms": 128.34,
+      "mean_ms": 61.55,
+      "max_ms": 226.02
+    },
+    "search_number": {
+      "params": {
+        "q": "#25000"
+      },
+      "items_per_page": 1,
+      "requests": 1000,
+      "non_200": 0,
+      "p50_ms": 7.84,
+      "p95_ms": 16.43,
+      "p99_ms": 25.0,
+      "mean_ms": 9.23,
+      "max_ms": 32.97
+    }
+  }
+}
