@@ -12,6 +12,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 import anthropic
@@ -23,6 +24,7 @@ FALLBACK_BETA = "server-side-fallback-2026-07-01"
 # Models that accept server-side refusal fallback (Haiku 5.5 has none).
 FALLBACK_MODELS = frozenset({"claude-opus-5-5", "claude-sonnet-5-5"})
 _RETRYABLE_STATUS = {408, 409, 429}
+_SDK_LOGGERS = ("anthropic", "httpx2")
 
 
 class AnthropicProvider:
@@ -37,6 +39,11 @@ class AnthropicProvider:
         timeout_s: float,
         client: anthropic.AsyncAnthropic | None = None,
     ) -> None:
+        # The SDK logs full request bodies (prompt text = telemetry excerpts) at DEBUG, which
+        # `LOG_LEVEL=DEBUG` or `ANTHROPIC_LOG=debug` would turn on. Prompts are never logged
+        # (D7), so its loggers are pinned at WARNING whatever the app or env asks for.
+        for name in _SDK_LOGGERS:
+            logging.getLogger(name).setLevel(logging.WARNING)
         self.model = model
         self._effort = effort
         self._fallback = model in FALLBACK_MODELS

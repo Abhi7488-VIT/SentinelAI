@@ -2,6 +2,34 @@
 
 Read at the start of every session. Updated at the end of each phase.
 
+## Phase 4 — in progress on branch `phase-4-investigation-engine`
+
+Plan: `docs/plans/phase-4.md`, approved 2026-11-20 (revision 1). Phase 3 was merged to `main`
+(PR #2, `afb6fe1`); the "not merged" note in the Phase 3 section below is out of date.
+
+Session constraint from 2026-11-20 (Codespace hours nearly used up): no testbed or Docker stack is
+started; only work that unit tests + the FakeProvider can verify. **pending-live** = needs the live
+testbed and is deferred until hours are available.
+
+| Task | Status |
+|---|---|
+| T0 S2–S5 detection check | **pending-live**. S2 run `20261120T101344Z-5c6f9c`: detected, but split into 2 incidents (Phase 3 correlation gap, `docs/evidence/phase-4/t0-slow-sql-*`), reported per R1, awaiting your decision. S3–S5 not run. |
+| T1 LLM provider | code + tests green locally; **blocked on `uv.lock`**: `anthropic==2.6.0` is not yet in `pyproject.toml`/`uv.lock` because uv's TLS handshakes to PyPI time out from this Codespace (curl/Python reach it). Verified with the SDK installed into the local venv by pip. CI (`uv sync --locked`) will fail until the lock is updated. |
+| T2–T8 | not started (all buildable with unit/integration tests + FakeProvider) |
+| T9 Workspace UI | not started; its Playwright e2e is **pending-live** (needs the compose stack) |
+| T10 Live acceptance | **pending-live** (also needs `ANTHROPIC_API_KEY`, D1) |
+| T11 Docs + report | not started |
+
+### T1 notes (2026-11-20)
+- Tests: backend **453 passed** (unit 250 incl. 21 new Anthropic-provider tests over a mocked
+  `httpx2` transport; integration against the already-running SentinelAI Postgres); ruff + mypy
+  strict clean (187 files).
+- Found and fixed: at DEBUG the SDK's own `anthropic`/`httpx2` loggers write full request bodies
+  (prompt text) — the provider now pins them at WARNING; test asserts no key or prompt text in
+  logs, errors or `llm_calls` records.
+- Fixed: migration test's expected table set lacked `llm_calls`.
+- `anthropic` 2.x uses `httpx2` (not `httpx`) as its HTTP library; tests mock that.
+
 ## Phase 3 — complete on branch `phase-3-incident-management`, awaiting review (not merged)
 
 Plan: `docs/plans/phase-3.md`, approved 2026-11-19 (D1–D6 as proposed). Work runs in the Codespace

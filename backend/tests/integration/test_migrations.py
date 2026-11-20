@@ -37,6 +37,7 @@ EXPECTED_TABLES = {
     "incident_detections",
     "incident_services",
     "incident_events",
+    "llm_calls",
 }
 
 
