@@ -22,10 +22,38 @@ tests use only those two.
 | T2 Evidence store + tools | **done** (2026-11-23): see T2 notes. Ruff/mypy clean (204 files), backend **480 passed**. |
 | T3 Graph skeleton + checkpoints | **done** (2026-11-23): see T3 notes. Ruff/mypy clean (217 files), backend **499 passed**. Compose wiring (migrate → checkpoint setup, `investigation-worker`) is **pending-live**: validated with `docker compose config` only. |
 | T4 Hypotheses + verification | **done** (2026-11-23): see T4 notes. Ruff/mypy clean (221 files), backend **517 passed**. |
-| T5–T8 | not started (all buildable with unit/integration tests + FakeProvider) |
+| T5 Controls | **done** (2026-11-23): see T5 notes. Ruff/mypy clean (226 files), backend **536 passed**. Live `docker kill` of the worker and live cancel are part of T10 (**pending-live**); the SIGKILL test here kills a real worker process. |
+| T6–T8 | not started (all buildable with unit/integration tests + FakeProvider) |
 | T9 Workspace UI | not started; UI code + Vitest buildable now; Playwright e2e is **pending-live** (needs the compose stack) |
 | T10 Live acceptance | **pending-live** (also needs `ANTHROPIC_API_KEY`, D1) |
 | T11 Docs + report | not started |
+
+### T5 notes (2026-11-23)
+- Migration `0013`: budgets on the investigation row (defaults = plan D3/A1: 30 steps, 200k
+  tokens, 600 s, 60 tool calls, 15 LLM calls, $1.00; CHECK > 0), durable counters `used_steps`,
+  `used_tool_calls`, `last_node`, `attempts`, `cancel_requested_at`; `investigation_dead_letters`
+  (one per investigation, error class only).
+- `app/investigation/controls.py` `Guard`: checked before every node, tool call and LLM attempt
+  (the client's `pre_call`), so a call over budget is not made. Usage comes from durable rows
+  (counters; `llm_calls` sums for calls/tokens/cost; wall-clock from `started_at`), so a resumed
+  run keeps what it already spent. Exhaustion → `incomplete` with `budget:<name>`; hypotheses are
+  only written inside the verification transaction, so a stop never changes one.
+- Cancellation: `request_cancel` sets `cancel_requested_at`; the runner's watcher polls every 1 s
+  and cancels the in-flight node/LLM task (measured < 5 s in the test); nodes also check on entry.
+  A run cancelled while still queued ends `cancelled` without running.
+- Task: `investigation.run` retries 3× with exponential backoff + jitter, then records the dead
+  letter and sets `failed`. A run whose lease was taken more than 5 times (keeps getting killed)
+  is dead-lettered as `too_many_attempts`. Beat `investigation.sweep` (60 s) re-enqueues runs
+  with an expired lease, a lease released > 2 min ago, or queued > 2 min.
+- The steps budget now comes from the Guard; LangGraph's recursion limit is only a backstop (100).
+- Tests: 6 unit (retry → cap → dead-letter policy, routing, beat entry) + 13 integration: each of
+  the 6 budgets → `incomplete` with the budget named and no hypotheses; budget hit after
+  verification keeps the verified rows; cancel mid-node (stopped < 5 s, nothing ran after);
+  cancel while queued; dead letter once + `failed`; too many attempts; sweep selection; **SIGKILL**
+  of a real worker process inside the telemetry node → lease expiry → sweep → resume without
+  re-running the planner, evidence dedup keys identical to an uninterrupted run.
+- Limitation: token/cost budgets are checked as "already used ≥ budget" before each attempt, so
+  one call can overshoot by its own usage (bounded by the client's per-call input cap).
 
 ### T4 notes (2026-11-23)
 - Migration `0012`: `hypotheses` (status/rank/primary set only by verification; one primary per

@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Sequence
+from decimal import Decimal
+
+from sqlalchemy import func
 
 from app.llm.types import CallRecord
 from app.models.llm_call import LLMCall
@@ -47,3 +50,25 @@ class LLMCallRepository(TenantRepository[LLMCall]):
             self.scoped().where(LLMCall.investigation_id == investigation_id).order_by(LLMCall.id)
         )
         return (await self.session.scalars(stmt)).all()
+
+    async def totals(self, investigation_id: uuid.UUID) -> tuple[int, int, Decimal]:
+        """(attempts, tokens in+out+cache, cost) of this investigation's LLM calls so far."""
+        stmt = (
+            self.scoped()
+            .where(LLMCall.investigation_id == investigation_id)
+            .with_only_columns(
+                func.count(),
+                func.coalesce(
+                    func.sum(
+                        LLMCall.input_tokens
+                        + LLMCall.output_tokens
+                        + LLMCall.cache_read_tokens
+                        + LLMCall.cache_write_tokens
+                    ),
+                    0,
+                ),
+                func.coalesce(func.sum(LLMCall.cost_usd), 0),
+            )
+        )
+        n, tokens, cost = (await self.session.execute(stmt)).one()
+        return int(n), int(tokens), Decimal(cost)

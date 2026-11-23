@@ -18,6 +18,7 @@ from app.core.config import Settings, get_settings
 from app.core.logging import get_logger
 from app.ingest.batch import decode_batch
 from app.ingest.dead_letter import dead_letter
+from app.investigation.execute import dead_letter_run, find_stuck
 from app.investigation.execute import execute as execute_investigation
 from app.services.detection import run_tick
 from app.services.ingest_writer import WriteResult, write_batch
@@ -138,23 +139,70 @@ def write_ingest_batch(self: Any, payload: str) -> dict[str, Any]:
         raise self.retry(exc=exc, countdown=countdown) from exc
 
 
-@shared_task(
-    name="investigation.run",
-    bind=True,
-    acks_late=True,
-    time_limit=900,  # above the 10-min wall-clock budget (D3), enforced in-run by T5
-    soft_time_limit=870,
-)
-def run_investigation_task(self: Any, org_id: str, investigation_id: str) -> dict[str, Any]:
-    """Consumes the `investigations` queue. Safe to redeliver: lease + checkpoint resume +
-    evidence dedup. `org_id` comes from the row the API created, never from telemetry."""
-    owner = f"{socket.gethostname()}:{os.getpid()}:{self.request.id}"[:128]
-    outcome = asyncio.run(
-        execute_investigation(get_settings(), uuid.UUID(org_id), uuid.UUID(investigation_id), owner)
-    )
+INVESTIGATION_MAX_RETRIES = 3
+
+
+def process_investigation(
+    run: Callable[[], Any],
+    dead: Callable[[str, int], None],
+    *,
+    retries: int,
+) -> dict[str, Any]:
+    """Run once; on an error, raise to request a retry until the cap, then dead-letter
+    (error class only; the stack trace goes to the logs) and report `failed`."""
+    try:
+        outcome = run()
+    except Exception as exc:
+        if retries >= INVESTIGATION_MAX_RETRIES:
+            logger.exception("investigation_run_failed", attempts=retries + 1)
+            dead(type(exc).__name__, retries + 1)
+            return {"status": "failed", "dead_letter": type(exc).__name__}
+        raise
     return {
         "status": outcome.status,
         "reasons": outcome.reasons,
         "resumed": outcome.resumed,
         "skipped": outcome.skipped,
     }
+
+
+@shared_task(
+    name="investigation.run",
+    bind=True,
+    acks_late=True,
+    max_retries=INVESTIGATION_MAX_RETRIES,
+    time_limit=900,  # above the 10-min wall-clock budget (D3), which the run enforces itself
+    soft_time_limit=870,
+)
+def run_investigation_task(self: Any, org_id: str, investigation_id: str) -> dict[str, Any]:
+    """Consumes the `investigations` queue. Safe to redeliver: lease + checkpoint resume +
+    evidence dedup. `org_id` comes from the row the API created, never from telemetry."""
+    settings = get_settings()
+    org, inv = uuid.UUID(org_id), uuid.UUID(investigation_id)
+    owner = f"{socket.gethostname()}:{os.getpid()}:{self.request.id}"[:128]
+    try:
+        return process_investigation(
+            lambda: asyncio.run(execute_investigation(settings, org, inv, owner)),
+            lambda error_class, attempts: asyncio.run(
+                dead_letter_run(settings, org, inv, error_class, attempts)
+            ),
+            retries=self.request.retries,
+        )
+    except Exception as exc:
+        countdown = retry_countdown(self.request.retries)
+        logger.warning(
+            "investigation_retry",
+            attempt=self.request.retries + 1,
+            countdown_s=round(countdown, 1),
+            error=type(exc).__name__,
+        )
+        raise self.retry(exc=exc, countdown=countdown) from exc
+
+
+@shared_task(name="investigation.sweep")
+def sweep_investigations() -> dict[str, Any]:
+    """Re-enqueue investigations whose worker is gone (expired lease, lost message)."""
+    stuck = asyncio.run(find_stuck(get_settings()))
+    for org, inv in stuck:
+        run_investigation_task.apply_async(args=[str(org), str(inv)])
+    return {"requeued": [str(i) for _, i in stuck]}

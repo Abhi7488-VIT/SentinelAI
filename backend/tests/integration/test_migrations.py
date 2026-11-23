@@ -43,6 +43,7 @@ EXPECTED_TABLES = {
     "hypotheses",
     "hypothesis_evidence",
     "verification_checks",
+    "investigation_dead_letters",
 }
 
 

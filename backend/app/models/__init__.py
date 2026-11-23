@@ -14,6 +14,7 @@ from app.models.investigation import (
     Hypothesis,
     HypothesisEvidence,
     Investigation,
+    InvestigationDeadLetter,
     VerificationCheck,
 )
 from app.models.llm_call import LLMCall
@@ -49,6 +50,7 @@ __all__ = [
     "IngestBatch",
     "IngestUsage",
     "Investigation",
+    "InvestigationDeadLetter",
     "LLMCall",
     "LogRecord",
     "MetricPoint",

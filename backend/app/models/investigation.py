@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
+from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import (
@@ -26,6 +27,7 @@ from sqlalchemy import (
     Identity,
     Index,
     Integer,
+    Numeric,
     PrimaryKeyConstraint,
     String,
     Text,
@@ -84,6 +86,11 @@ class Investigation(TimestampMixin, Base):
         Index("ix_investigations_org_id_created_at_id", "org_id", "created_at", "id"),
         Index("ix_investigations_org_id_incident_id", "org_id", "incident_id"),
         CheckConstraint("(lease_owner IS NULL) = (lease_expires_at IS NULL)", name="lease_pair"),
+        CheckConstraint(
+            "budget_steps > 0 AND budget_tokens > 0 AND budget_wall_clock_s > 0"
+            " AND budget_tool_calls > 0 AND budget_llm_calls > 0 AND budget_cost_usd > 0",
+            name="budgets_positive",
+        ),
         # Expired-lease sweep (T5): running investigations by lease expiry.
         Index(
             "ix_investigations_running_lease",
@@ -114,6 +121,22 @@ class Investigation(TimestampMixin, Base):
     # Lease: the worker that runs it, until when (renewed while running; plan §7 crash resume).
     lease_owner: Mapped[str | None] = mapped_column(String(128))
     lease_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Budgets (plan §7, D3/A1), recorded on the row so a resumed run keeps the same limits.
+    budget_steps: Mapped[int] = mapped_column(Integer, nullable=False, server_default="30")
+    budget_tokens: Mapped[int] = mapped_column(Integer, nullable=False, server_default="200000")
+    budget_wall_clock_s: Mapped[int] = mapped_column(Integer, nullable=False, server_default="600")
+    budget_tool_calls: Mapped[int] = mapped_column(Integer, nullable=False, server_default="60")
+    budget_llm_calls: Mapped[int] = mapped_column(Integer, nullable=False, server_default="15")
+    budget_cost_usd: Mapped[Decimal] = mapped_column(
+        Numeric(10, 4), nullable=False, server_default="1.00"
+    )
+    # Durable usage counters (LLM tokens/cost/calls are summed from `llm_calls`).
+    used_steps: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    used_tool_calls: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    last_node: Mapped[str | None] = mapped_column(String(32))
+    # Times a worker took the lease; a run that keeps dying is dead-lettered, not retried forever.
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    cancel_requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class Evidence(Base):
@@ -292,4 +315,31 @@ class VerificationCheck(Base):
     detail: Mapped[str] = mapped_column(String(500), nullable=False)
     evidence_ids: Mapped[list[str]] = mapped_column(
         JSONB, nullable=False, server_default=text("'[]'::jsonb")
+    )
+
+
+class InvestigationDeadLetter(Base):
+    """A run that failed after its task retries (plan §7): error class only, stack traces go to
+    the logs. One row per investigation (a redelivered failure does not add another)."""
+
+    __tablename__ = "investigation_dead_letters"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["org_id", "investigation_id"],
+            ["investigations.org_id", "investigations.id"],
+            ondelete="CASCADE",
+            name="fk_investigation_dead_letters_investigation",
+        ),
+        UniqueConstraint("investigation_id", name="uq_investigation_dead_letters_investigation"),
+        Index("ix_investigation_dead_letters_org_id_created_at", "org_id", "created_at"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
+    org_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    investigation_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    error_class: Mapped[str] = mapped_column(String(128), nullable=False)
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False)
+    last_node: Mapped[str | None] = mapped_column(String(32))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
     )

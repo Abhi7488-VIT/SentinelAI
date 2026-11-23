@@ -23,7 +23,7 @@ import uuid
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
-from typing import Annotated, Any, TypedDict
+from typing import Annotated, Any, Protocol, TypedDict
 
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
@@ -32,6 +32,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.logging import get_logger
 from app.core.tenancy import SystemScope
+from app.investigation.controls import BudgetExceededError, Guard
 from app.investigation.prompting import (
     claims_block,
     escape,
@@ -53,6 +54,7 @@ from app.investigation.verification import EvidenceView, verify
 from app.investigation.verification import rank as rank_verdicts
 from app.llm.client import LLMClient
 from app.llm.errors import (
+    LLMBudgetExceededError,
     LLMError,
     LLMFatalError,
     LLMInputTooLargeError,
@@ -108,6 +110,12 @@ class InvestigationState(TypedDict, total=False):
 Hook = Callable[[], Awaitable[None]]
 
 
+class NodeFn(Protocol):
+    """A node as LangGraph types it (the parameter must be named `state`)."""
+
+    def __call__(self, state: InvestigationState) -> Awaitable[dict[str, Any]]: ...
+
+
 @dataclass
 class EngineDeps:
     sessionmaker: async_sessionmaker[AsyncSession]
@@ -115,6 +123,8 @@ class EngineDeps:
     now: Callable[[], datetime] = field(default=lambda: datetime.now(UTC))
     # Test seams: named points inside nodes (e.g. "telemetry.after_first_tool").
     hooks: Mapping[str, Hook] = field(default_factory=dict)
+    # Budgets + cancellation (T5); None only in tests that exercise the graph alone.
+    guard: Guard | None = None
 
     async def hook(self, name: str) -> None:
         fn = self.hooks.get(name)
@@ -173,6 +183,14 @@ def _ids(state: InvestigationState) -> tuple[uuid.UUID, SystemScope]:
 
 
 def build_graph(deps: EngineDeps) -> StateGraph[InvestigationState]:
+    async def tool[**P](
+        fn: Callable[P, Awaitable[Evidence]], *args: P.args, **kw: P.kwargs
+    ) -> Evidence:
+        """Every tool call is counted and checked against budgets/cancellation first."""
+        if deps.guard is not None:
+            await deps.guard.before_tool()
+        return await fn(*args, **kw)
+
     async def call_llm[T: BaseModel](
         state: InvestigationState,
         node: str,
@@ -193,8 +211,16 @@ def build_graph(deps: EngineDeps) -> StateGraph[InvestigationState]:
         )
         try:
             result = await deps.llm.generate(
-                request, CallContext(org_id=scope.org_id, investigation_id=inv_id, node=node)
+                request,
+                CallContext(
+                    org_id=scope.org_id,
+                    investigation_id=inv_id,
+                    node=node,
+                    pre_call=deps.guard.before_llm if deps.guard is not None else None,
+                ),
             )
+        except LLMBudgetExceededError as exc:
+            raise BudgetExceededError(exc.budget) from None  # stops the run, not just this call
         except LLMError as exc:
             logger.warning("investigation_llm_failed", node=node, error=type(exc).__name__)
             return None, llm_reason(exc, node)
@@ -237,7 +263,7 @@ def build_graph(deps: EngineDeps) -> StateGraph[InvestigationState]:
             affected = (await IncidentServiceRepository(s, scope).of([incident_id]))[incident_id]
             affected = affected[:MAX_CANDIDATES]
             w = compute_windows(incident.started_at, incident.last_activity_at, deps.now())
-            evidence: list[Evidence] = [await detection_ref(ctx, incident_id=incident_id)]
+            evidence: list[Evidence] = [await tool(detection_ref, ctx, incident_id=incident_id)]
             await s.commit()
             if not affected:
                 return {
@@ -247,7 +273,8 @@ def build_graph(deps: EngineDeps) -> StateGraph[InvestigationState]:
                     "stages": ["planner"],
                 }
             evidence.append(
-                await dependency_lookup(
+                await tool(
+                    dependency_lookup,
                     ctx,
                     service_ids=affected,
                     start=w.start,
@@ -258,8 +285,13 @@ def build_graph(deps: EngineDeps) -> StateGraph[InvestigationState]:
             )
             await s.commit()
             evidence.append(
-                await deploy_lookup(
-                    ctx, service_ids=affected, start=w.start, end=w.end, onset=w.onset
+                await tool(
+                    deploy_lookup,
+                    ctx,
+                    service_ids=affected,
+                    start=w.start,
+                    end=w.end,
+                    onset=w.onset,
                 )
             )
             await s.commit()
@@ -325,10 +357,11 @@ def build_graph(deps: EngineDeps) -> StateGraph[InvestigationState]:
             ctx = await ToolContext.open(s, scope, inv_id, "telemetry")
             for svc in focus:
                 name = names.get(str(svc), str(svc))
-                logs = await log_query(ctx, service_id=svc, start=w.start, end=w.end)
+                logs = await tool(log_query, ctx, service_id=svc, start=w.start, end=w.end)
                 await s.commit()
                 await deps.hook("telemetry.after_first_tool")
-                metrics = await metric_query(
+                metrics = await tool(
+                    metric_query,
                     ctx,
                     service_id=svc,
                     start=w.start,
@@ -337,7 +370,8 @@ def build_graph(deps: EngineDeps) -> StateGraph[InvestigationState]:
                     baseline_end=w.baseline_end,
                 )
                 await s.commit()
-                traces = await trace_analysis(
+                traces = await tool(
+                    trace_analysis,
                     ctx,
                     service_ids=[svc],
                     start=w.start,
@@ -354,7 +388,9 @@ def build_graph(deps: EngineDeps) -> StateGraph[InvestigationState]:
                 if traces.row_count == 0:
                     missing.append(f"no_telemetry:{name}:traces")
             evidence.append(
-                await deploy_lookup(ctx, service_ids=focus, start=w.start, end=w.end, onset=w.onset)
+                await tool(
+                    deploy_lookup, ctx, service_ids=focus, start=w.start, end=w.end, onset=w.onset
+                )
             )
             await s.commit()
         if len(missing) == 3 * len(focus):
@@ -396,7 +432,8 @@ def build_graph(deps: EngineDeps) -> StateGraph[InvestigationState]:
         names = state.get("candidates", {})
         async with deps.sessionmaker() as s:
             ctx = await ToolContext.open(s, scope, inv_id, "dependency")
-            edges = await dependency_lookup(
+            edges = await tool(
+                dependency_lookup,
                 ctx,
                 service_ids=focus,
                 start=w.start,
@@ -405,7 +442,8 @@ def build_graph(deps: EngineDeps) -> StateGraph[InvestigationState]:
                 baseline_end=w.baseline_end,
             )
             await s.commit()
-            traces = await trace_analysis(
+            traces = await tool(
+                trace_analysis,
                 ctx,
                 service_ids=focus,
                 start=w.start,
@@ -606,13 +644,24 @@ def build_graph(deps: EngineDeps) -> StateGraph[InvestigationState]:
         # T7 replaces this with the report builder and its citation gate.
         return {"incomplete_reasons": ["report_not_generated"], "stages": ["report"]}
 
+    def guarded(name: str, fn: NodeFn) -> NodeFn:
+        async def run(state: InvestigationState) -> dict[str, Any]:
+            if deps.guard is not None:
+                await deps.guard.enter(name)  # cancellation, wall-clock, steps; counts the step
+            return await fn(state)
+
+        return run
+
     g: StateGraph[InvestigationState] = StateGraph(InvestigationState)
-    g.add_node("planner", planner)
-    g.add_node("telemetry", telemetry)
-    g.add_node("dependency", dependency)
-    g.add_node("analyst", analyst)
-    g.add_node("verification", verification)
-    g.add_node("report", report)
+    for name, fn in (
+        ("planner", planner),
+        ("telemetry", telemetry),
+        ("dependency", dependency),
+        ("analyst", analyst),
+        ("verification", verification),
+        ("report", report),
+    ):
+        g.add_node(name, guarded(name, fn))
     g.add_edge(START, "planner")
     g.add_edge("planner", "telemetry")
     g.add_edge("planner", "dependency")

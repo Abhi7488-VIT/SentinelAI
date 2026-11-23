@@ -8,8 +8,9 @@ from dataclasses import dataclass
 from datetime import timedelta
 from typing import Any
 
-from sqlalchemy import ColumnElement, delete, func, update
+from sqlalchemy import ColumnElement, and_, delete, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.investigation import (
     ACTIVE_STATUSES,
@@ -17,6 +18,7 @@ from app.models.investigation import (
     Hypothesis,
     HypothesisEvidence,
     Investigation,
+    InvestigationDeadLetter,
     VerificationCheck,
 )
 from app.repositories.base import TenantRepository
@@ -48,6 +50,7 @@ class InvestigationRepository(TenantRepository[Investigation]):
                 lease_expires_at=func.now() + ttl,
                 status="running",
                 started_at=func.coalesce(Investigation.started_at, func.now()),
+                attempts=Investigation.attempts + 1,
             )
             .returning(Investigation)
             .execution_options(synchronize_session=False)
@@ -103,6 +106,129 @@ class InvestigationRepository(TenantRepository[Investigation]):
             .execution_options(synchronize_session=False)
         )
         return (await self.session.scalar(stmt)) is not None
+
+    async def enter_step(self, investigation_id: uuid.UUID, node: str) -> int:
+        """Count one node execution (retries and re-runs included); returns the new total."""
+        stmt = (
+            update(Investigation)
+            .where(Investigation.org_id == self.ctx.org_id, Investigation.id == investigation_id)
+            .values(used_steps=Investigation.used_steps + 1, last_node=node[:32])
+            .returning(Investigation.used_steps)
+            .execution_options(synchronize_session=False)
+        )
+        return int(await self.session.scalar(stmt) or 0)
+
+    async def add_tool_call(self, investigation_id: uuid.UUID) -> int:
+        stmt = (
+            update(Investigation)
+            .where(Investigation.org_id == self.ctx.org_id, Investigation.id == investigation_id)
+            .values(used_tool_calls=Investigation.used_tool_calls + 1)
+            .returning(Investigation.used_tool_calls)
+            .execution_options(synchronize_session=False)
+        )
+        return int(await self.session.scalar(stmt) or 0)
+
+    async def request_cancel(self, investigation_id: uuid.UUID) -> bool:
+        """Mark an active investigation for cancellation (idempotent). False if not active."""
+        stmt = (
+            update(Investigation)
+            .where(
+                Investigation.org_id == self.ctx.org_id,
+                Investigation.id == investigation_id,
+                Investigation.status.in_(ACTIVE_STATUSES),
+            )
+            .values(
+                cancel_requested_at=func.coalesce(Investigation.cancel_requested_at, func.now())
+            )
+            .returning(Investigation.id)
+            .execution_options(synchronize_session=False)
+        )
+        return (await self.session.scalar(stmt)) is not None
+
+    async def cancel_queued(self, investigation_id: uuid.UUID) -> bool:
+        """A queued run that was cancelled before any worker took it ends here."""
+        stmt = (
+            update(Investigation)
+            .where(
+                Investigation.org_id == self.ctx.org_id,
+                Investigation.id == investigation_id,
+                Investigation.status == "queued",
+                Investigation.cancel_requested_at.is_not(None),
+            )
+            .values(status="cancelled", finished_at=func.now())
+            .returning(Investigation.id)
+            .execution_options(synchronize_session=False)
+        )
+        return (await self.session.scalar(stmt)) is not None
+
+    async def fail(self, investigation_id: uuid.UUID, reasons: list[str]) -> bool:
+        """`failed` (after the task's retries), whoever held the lease."""
+        stmt = (
+            update(Investigation)
+            .where(
+                Investigation.org_id == self.ctx.org_id,
+                Investigation.id == investigation_id,
+                Investigation.status.in_(ACTIVE_STATUSES),
+            )
+            .values(
+                status="failed",
+                incomplete_reasons=reasons,
+                finished_at=func.now(),
+                lease_owner=None,
+                lease_expires_at=None,
+            )
+            .returning(Investigation.id)
+            .execution_options(synchronize_session=False)
+        )
+        return (await self.session.scalar(stmt)) is not None
+
+
+class InvestigationDeadLetterRepository(TenantRepository[InvestigationDeadLetter]):
+    model = InvestigationDeadLetter
+
+    async def record_once(
+        self, investigation_id: uuid.UUID, error_class: str, attempts: int, last_node: str | None
+    ) -> None:
+        await self.session.execute(
+            insert(InvestigationDeadLetter)
+            .values(
+                org_id=self.ctx.org_id,
+                investigation_id=investigation_id,
+                error_class=error_class[:128],
+                attempts=attempts,
+                last_node=last_node,
+            )
+            .on_conflict_do_nothing(constraint="uq_investigation_dead_letters_investigation")
+        )
+
+
+async def stuck_investigations(
+    session: AsyncSession, *, stale: timedelta, limit: int
+) -> list[tuple[uuid.UUID, uuid.UUID]]:
+    """System query for the sweep job: (org_id, id) of investigations whose worker is gone —
+    `running` with an expired lease, `running` with no lease for longer than `stale` (the task
+    that released it never came back), or `queued` for longer than `stale` (lost message).
+    Returns ids only; each is re-enqueued and re-checked under its own tenant scope."""
+    cutoff = func.now() - stale
+    stmt = (
+        select(Investigation.org_id, Investigation.id)
+        .where(
+            or_(
+                and_(
+                    Investigation.status == "running", Investigation.lease_expires_at < func.now()
+                ),
+                and_(
+                    Investigation.status == "running",
+                    Investigation.lease_owner.is_(None),
+                    Investigation.updated_at < cutoff,
+                ),
+                and_(Investigation.status == "queued", Investigation.created_at < cutoff),
+            )
+        )
+        .order_by(Investigation.created_at, Investigation.id)
+        .limit(limit)
+    )
+    return [(r[0], r[1]) for r in (await session.execute(stmt)).all()]
 
 
 class EvidenceRepository(TenantRepository[Evidence]):

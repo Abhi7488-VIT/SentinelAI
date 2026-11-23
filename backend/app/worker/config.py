@@ -44,6 +44,12 @@ def configure_celery(app: Celery, settings: Settings) -> Celery:
                 "schedule": 15.0,
                 "options": {"expires": 14},
             },
+            # Investigations whose worker died without redelivery, or lost messages (T5).
+            "investigation-sweep": {
+                "task": "investigation.sweep",
+                "schedule": 60.0,
+                "options": {"expires": 55},
+            },
             "graph-discover-edges": {
                 "task": "graph.discover_edges",
                 "schedule": 60.0,
