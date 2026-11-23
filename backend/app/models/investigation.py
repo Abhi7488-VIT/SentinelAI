@@ -52,6 +52,20 @@ EVIDENCE_KINDS = (
 )
 # Hard cap on `evidence.data` (bytes of its JSON text). The Python side trims to a smaller
 # budget (`app.investigation.evidence.DATA_BUDGET_BYTES`) so jsonb's own formatting never trips it.
+EVENT_TYPES = (
+    "stage_started",
+    "stage_completed",
+    "tool_completed",
+    "llm_call",
+    "hypothesis_added",
+    "hypothesis_verified",
+    "budget_warning",
+    "rejected_by_allowlist",
+    "status_changed",
+    "report_ready",
+)
+EVENT_PAYLOAD_MAX_BYTES = 4096
+REPORT_SCHEMA_VERSION = 1
 HYPOTHESIS_STATUSES = ("confirmed", "probable", "inconclusive")
 CHECK_RESULTS = ("pass", "fail", "not_run", "not_applicable")
 EVIDENCE_DATA_MAX_BYTES = 16 * 1024
@@ -340,6 +354,79 @@ class InvestigationDeadLetter(Base):
     error_class: Mapped[str] = mapped_column(String(128), nullable=False)
     attempts: Mapped[int] = mapped_column(Integer, nullable=False)
     last_node: Mapped[str | None] = mapped_column(String(32))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class InvestigationEvent(Base):
+    """Progress log for SSE (plan §8). The BIGINT identity id is monotonic, so a client resumes
+    with `Last-Event-ID` and gets exactly what it missed. Payloads come from per-type field
+    allow-lists (`app.investigation.events`) and are capped at 4 KiB; never prompt text,
+    credentials or raw telemetry beyond an evidence summary."""
+
+    __tablename__ = "investigation_events"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["org_id", "investigation_id"],
+            ["investigations.org_id", "investigations.id"],
+            ondelete="CASCADE",
+            name="fk_investigation_events_investigation",
+        ),
+        CheckConstraint(_in("type", EVENT_TYPES), name="type_valid"),
+        CheckConstraint(
+            f"octet_length(payload::text) <= {EVENT_PAYLOAD_MAX_BYTES}", name="payload_size"
+        ),
+        Index(
+            "ix_investigation_events_org_id_investigation_id_id", "org_id", "investigation_id", "id"
+        ),
+        # Events that must appear once per investigation (e.g. one budget_warning per budget).
+        Index(
+            "uq_investigation_events_once",
+            "investigation_id",
+            "once_key",
+            unique=True,
+            postgresql_where=text("once_key IS NOT NULL"),
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
+    org_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    investigation_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    type: Mapped[str] = mapped_column(String(32), nullable=False)
+    payload: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, server_default=text("'{}'::jsonb")
+    )
+    once_key: Mapped[str | None] = mapped_column(String(64))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class InvestigationReport(Base):
+    """The report (plan §8), assembled from stored rows. Stored only if every evidence id in it
+    resolves for this investigation (citation gate); a re-run replaces it."""
+
+    __tablename__ = "investigation_reports"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["org_id", "investigation_id"],
+            ["investigations.org_id", "investigations.id"],
+            ondelete="CASCADE",
+            name="fk_investigation_reports_investigation",
+        ),
+        UniqueConstraint("investigation_id", name="uq_investigation_reports_investigation"),
+        Index("ix_investigation_reports_org_id_investigation_id", "org_id", "investigation_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    org_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    investigation_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    schema_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    report: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    cited_evidence_ids: Mapped[list[str]] = mapped_column(JSONB, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

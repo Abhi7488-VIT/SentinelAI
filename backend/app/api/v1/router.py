@@ -8,6 +8,7 @@ from app.api.v1 import (
     auth,
     detections,
     incidents,
+    investigations,
     orgs,
     overview,
     projects,
@@ -23,4 +24,5 @@ api_router.include_router(services.router)
 api_router.include_router(service_graph.router)
 api_router.include_router(detections.router)
 api_router.include_router(incidents.router)
+api_router.include_router(investigations.router)
 api_router.include_router(overview.router)

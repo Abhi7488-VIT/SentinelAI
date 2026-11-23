@@ -12,8 +12,9 @@
 - Every id an LLM cites is checked against the `evidence` table for this investigation and org;
   unknown ids are removed and recorded (invariant 1).
 - Verification (T4) is deterministic (`app.investigation.verification`): it alone sets hypothesis
-  status, rank and primary. The report is a placeholder until T7 (`report_not_generated`), so a
-  run still ends `incomplete`, never `completed` (invariant 2).
+  status, rank and primary. The report (T7) is assembled from stored rows and stored only if
+  every evidence id in it resolves (citation gate).
+- Progress is recorded as `investigation_events` (T7) for SSE.
 """
 
 from __future__ import annotations
@@ -33,12 +34,14 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.core.logging import get_logger
 from app.core.tenancy import SystemScope
 from app.investigation.controls import BudgetExceededError, Guard
+from app.investigation.events import Events, emit_in
 from app.investigation.prompting import (
     claims_block,
     escape,
     evidence_blocks,
     services_block,
 )
+from app.investigation.report import build_report, citation_gate, cited_ids
 from app.investigation.schemas import AnalystOutput, InvestigatorFindings, PlannerOutput
 from app.investigation.taxonomy import describe as describe_taxonomy
 from app.investigation.tools import (
@@ -71,6 +74,7 @@ from app.repositories.investigations import (
     EvidenceRepository,
     HypothesisRepository,
     HypothesisWrite,
+    InvestigationReportRepository,
 )
 from app.repositories.service_graph import ServiceEdgeRepository
 from app.repositories.services import ServiceRepository
@@ -140,6 +144,7 @@ class EngineDeps:
     hooks: Mapping[str, Hook] = field(default_factory=dict)
     # Budgets + cancellation (T5); None only in tests that exercise the graph alone.
     guard: Guard | None = None
+    events: Events | None = None
 
     async def hook(self, name: str) -> None:
         fn = self.hooks.get(name)
@@ -210,18 +215,31 @@ def build_graph(deps: EngineDeps) -> StateGraph[InvestigationState]:
             raise ToolNotAllowedError(f"{fn.__name__} is not allowed in {node}")
         if deps.guard is not None:
             await deps.guard.before_tool()
-        return await fn(*args, **kw)
+        ev = await fn(*args, **kw)
+        await emit(
+            "tool_completed",
+            node=node,
+            tool=fn.__name__,
+            evidence_id=ev.id,
+            summary=ev.summary,
+            row_count=ev.row_count,
+            truncated=ev.truncated,
+        )
+        return ev
 
-    def flagged(node: str, rejected: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        """Log every allow-list / citation rejection (T7 also persists them as
-        `rejected_by_allowlist` events). Values are truncated ids, never free text."""
+    async def emit(event_type: str, **fields: Any) -> None:
+        if deps.events is not None:
+            await deps.events.emit(event_type, **fields)
+
+    async def flagged(node: str, rejected: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Log and record every allow-list / citation rejection as a `rejected_by_allowlist`
+        event. Values are truncated ids, never free text."""
         for r in rejected:
+            value = str(r.get("value", ""))[:40]
             logger.warning(
-                "rejected_by_allowlist",
-                investigation_node=node,
-                kind=r.get("kind"),
-                value=str(r.get("value", ""))[:40],
+                "rejected_by_allowlist", investigation_node=node, kind=r.get("kind"), value=value
             )
+            await emit("rejected_by_allowlist", node=node, kind=r.get("kind"), value=value)
         return rejected
 
     async def call_llm[T: BaseModel](
@@ -369,7 +387,7 @@ def build_graph(deps: EngineDeps) -> StateGraph[InvestigationState]:
             "focus": focus,
             "plan_source": plan_source,
             "evidence_ids": [e.id for e in evidence],
-            "rejected": flagged("planner", rejected),
+            "rejected": await flagged("planner", rejected),
             "stages": ["planner"],
         }
 
@@ -448,7 +466,7 @@ def build_graph(deps: EngineDeps) -> StateGraph[InvestigationState]:
         return {
             "evidence_ids": [e.id for e in evidence],
             "findings": findings,
-            "rejected": flagged("telemetry", rejected),
+            "rejected": await flagged("telemetry", rejected),
             "incomplete_reasons": missing
             + ([reason] if reason else [])
             + ([f"evidence_not_shown:telemetry:{len(left_out)}"] if left_out else []),
@@ -507,7 +525,7 @@ def build_graph(deps: EngineDeps) -> StateGraph[InvestigationState]:
         return {
             "evidence_ids": [e.id for e in evidence],
             "findings": findings,
-            "rejected": flagged("dependency", rejected),
+            "rejected": await flagged("dependency", rejected),
             "incomplete_reasons": [reason] if reason else [],
             "stages": ["dependency"],
         }
@@ -582,9 +600,17 @@ def build_graph(deps: EngineDeps) -> StateGraph[InvestigationState]:
                     "model_confidence": h.confidence,  # display only, never decides status
                 }
             )
+        for added in hypotheses:
+            await emit(
+                "hypothesis_added",
+                proposed_rank=added["proposed_rank"],
+                category=added["category"],
+                subject_service_ids=added["subject_service_ids"],
+                supporting_evidence_ids=added["supporting_evidence_ids"],
+            )
         return {
             "hypotheses": hypotheses,
-            "rejected": flagged("analyst", rejected),
+            "rejected": await flagged("analyst", rejected),
             "incomplete_reasons": [f"evidence_not_shown:analyst:{len(left_out)}"]
             if left_out
             else [],
@@ -661,6 +687,20 @@ def build_graph(deps: EngineDeps) -> StateGraph[InvestigationState]:
                     }
                 )
             await HypothesisRepository(s, scope).replace_for_investigation(inv_id, writes)
+            for w in writes:  # in the same transaction as the rows they describe
+                await emit_in(
+                    s,
+                    scope,
+                    inv_id,
+                    "hypothesis_verified",
+                    rank=w.rank,
+                    category=w.category,
+                    status=w.status,
+                    status_reason=w.status_reason,
+                    checks_passed=w.checks_passed,
+                    checks_applicable=w.checks_applicable,
+                    is_primary=w.is_primary,
+                )
             await s.commit()
         reasons = (
             []
@@ -674,14 +714,45 @@ def build_graph(deps: EngineDeps) -> StateGraph[InvestigationState]:
         return {"hypotheses": verified, "incomplete_reasons": reasons, "stages": ["verification"]}
 
     async def report(state: InvestigationState) -> dict[str, Any]:
-        # T7 replaces this with the report builder and its citation gate.
-        return {"incomplete_reasons": ["report_not_generated"], "stages": ["report"]}
+        """Assemble the report from stored rows; store it only if every cited evidence id
+        resolves for this investigation (citation gate, plan §8)."""
+        inv_id, scope = _ids(state)
+        async with deps.sessionmaker() as s:
+            built, known = await build_report(s, scope, inv_id, dict(state), now=deps.now())
+            unknown = citation_gate(built, known)
+            if unknown:
+                logger.warning(
+                    "report_citation_check_failed",
+                    investigation_id=str(inv_id),
+                    unresolved=len(unknown),
+                )
+                return {
+                    "incomplete_reasons": ["report_citation_check_failed"],
+                    "stages": ["report"],
+                }
+            row = await InvestigationReportRepository(s, scope).replace(
+                inv_id, built, cited_ids(built)
+            )
+            await emit_in(
+                s,
+                scope,
+                inv_id,
+                "report_ready",
+                report_id=str(row.id),
+                cited_evidence=len(row.cited_evidence_ids),
+            )
+            await s.commit()
+        return {"stages": ["report"]}
 
     def guarded(name: str, fn: NodeFn) -> NodeFn:
         async def run(state: InvestigationState) -> dict[str, Any]:
             if deps.guard is not None:
                 await deps.guard.enter(name)  # cancellation, wall-clock, steps; counts the step
-            return await fn(state)
+            await emit("stage_started", stage=name)
+            out = await fn(state)
+            await emit("stage_completed", stage=name)
+            await deps.hook(f"{name}.done")
+            return out
 
         return run
 

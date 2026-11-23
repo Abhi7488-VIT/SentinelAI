@@ -82,6 +82,10 @@ class Settings(BaseSettings):
     llm_max_output_tokens: int = Field(default=8000, ge=256, le=64_000)
     llm_prices_json: str | None = None  # override of app.llm.pricing.DEFAULT_PRICES
 
+    # Investigation progress stream (SSE, Phase 4 plan §8): table poll and heartbeat intervals.
+    sse_poll_seconds: float = Field(default=1.0, ge=0.05, le=10)
+    sse_heartbeat_seconds: float = Field(default=15.0, ge=1, le=60)
+
     # HTTP
     cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:3000"])
 

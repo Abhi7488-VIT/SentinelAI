@@ -160,9 +160,8 @@ async def test_end_to_end_with_fake_provider(
     provider = scripted()
     out = await run(sessionmaker, gw, checkpointer, provider)
 
-    assert out.status == "incomplete"  # the report arrives in T7: never "completed" before
-    assert "report_not_generated" in out.reasons
-    assert "verification_not_run" not in out.reasons
+    assert out.status == "incomplete"  # gateway has no logs/metrics in this fixture
+    assert set(out.reasons) == {"no_telemetry:gateway:logs", "no_telemetry:gateway:metrics"}
     assert out.resumed is False
     state = out.state
     assert state["stages"][0] == "planner"
@@ -315,7 +314,7 @@ async def test_crash_mid_branch_reruns_only_that_node_without_duplicate_evidence
             gw,
             checkpointer,
             provider,
-            hooks={"telemetry.after_first_tool": die_once, "dependency.end": mark_done},
+            hooks={"telemetry.after_first_tool": die_once, "dependency.done": mark_done},
         )
     partial = await evidence_rows(sessionmaker, gw["inv"])
     assert any(r["kind"] == "log_query" for r in partial)  # committed before the crash
@@ -327,7 +326,7 @@ async def test_crash_mid_branch_reruns_only_that_node_without_duplicate_evidence
         checkpointer,
         provider,
         owner="worker-2",
-        hooks={"telemetry.after_first_tool": die_once, "dependency.end": mark_done},
+        hooks={"telemetry.after_first_tool": die_once, "dependency.done": mark_done},
     )
     assert out.resumed is True
     assert out.status == "incomplete"

@@ -15,6 +15,8 @@ from app.models.investigation import (
     HypothesisEvidence,
     Investigation,
     InvestigationDeadLetter,
+    InvestigationEvent,
+    InvestigationReport,
     VerificationCheck,
 )
 from app.models.llm_call import LLMCall
@@ -51,6 +53,8 @@ __all__ = [
     "IngestUsage",
     "Investigation",
     "InvestigationDeadLetter",
+    "InvestigationEvent",
+    "InvestigationReport",
     "LLMCall",
     "LogRecord",
     "MetricPoint",

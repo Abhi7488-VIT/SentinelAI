@@ -28,11 +28,13 @@ from decimal import Decimal
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.tenancy import SystemScope
+from app.investigation.events import Events
 from app.llm.errors import LLMBudgetExceededError
 from app.models.investigation import Investigation
 from app.repositories.investigations import InvestigationRepository
 from app.repositories.llm_calls import LLMCallRepository
 
+WARN_AT = 0.8
 BUDGETS = ("steps", "tokens", "wall_clock", "tool_calls", "llm_calls", "cost")
 
 
@@ -74,11 +76,20 @@ class Guard:
         scope: SystemScope,
         investigation_id: uuid.UUID,
         now: Callable[[], datetime] = lambda: datetime.now(UTC),
+        events: Events | None = None,
     ) -> None:
         self._sm = sessionmaker
         self._scope = scope
         self._id = investigation_id
         self._now = now
+        self._events = events
+
+    async def _warn(self, budget: str, used: float, limit: float) -> None:
+        """One `budget_warning` per budget once usage reaches 80 %."""
+        if self._events is not None and limit > 0 and used / limit >= WARN_AT:
+            await self._events.emit(
+                "budget_warning", once_key=f"budget:{budget}", budget=budget, used=used, limit=limit
+            )
 
     async def _row(self, s: AsyncSession) -> Investigation:
         inv = await InvestigationRepository(s, self._scope).get(self._id)
@@ -115,16 +126,20 @@ class Guard:
             inv = await self._check(s)
             if inv.used_steps >= inv.budget_steps:
                 raise BudgetExceededError("steps")
-            await InvestigationRepository(s, self._scope).enter_step(self._id, node)
+            used = await InvestigationRepository(s, self._scope).enter_step(self._id, node)
             await s.commit()
+        await self._warn("steps", used, inv.budget_steps)
+        elapsed = (self._now() - (inv.started_at or self._now())).total_seconds()
+        await self._warn("wall_clock", round(elapsed, 1), inv.budget_wall_clock_s)
 
     async def before_tool(self) -> None:
         async with self._sm() as s:
             inv = await self._check(s)
             if inv.used_tool_calls >= inv.budget_tool_calls:
                 raise BudgetExceededError("tool_calls")
-            await InvestigationRepository(s, self._scope).add_tool_call(self._id)
+            used = await InvestigationRepository(s, self._scope).add_tool_call(self._id)
             await s.commit()
+        await self._warn("tool_calls", used, inv.budget_tool_calls)
 
     async def before_llm(self) -> None:
         """`CallContext.pre_call`: runs before every attempt (retries included)."""
@@ -137,3 +152,6 @@ class Guard:
             raise LLMBudgetExceededError("tokens")
         if cost >= Decimal(inv.budget_cost_usd):
             raise LLMBudgetExceededError("cost")
+        await self._warn("llm_calls", calls + 1, inv.budget_llm_calls)
+        await self._warn("tokens", tokens, inv.budget_tokens)
+        await self._warn("cost", float(cost), float(inv.budget_cost_usd))

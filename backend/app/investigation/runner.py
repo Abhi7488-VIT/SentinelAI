@@ -25,6 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.core.logging import get_logger
 from app.core.tenancy import SystemScope
 from app.investigation.controls import BudgetExceededError, CancelRequestedError, Guard
+from app.investigation.events import Events, emit_in
 from app.investigation.graph import EngineDeps, Hook, InvestigationState, build_graph
 from app.llm.client import LLMClient
 from app.llm.types import CallRecord
@@ -72,6 +73,23 @@ class CommittingUsageSink:
     async def record(self, record: CallRecord) -> None:
         async with self._sm() as s:
             await LLMCallRepository(s, self._scope).record(record)
+            if record.investigation_id is not None:  # usage only, never text (plan §8)
+                await emit_in(
+                    s,
+                    self._scope,
+                    record.investigation_id,
+                    "llm_call",
+                    node=record.node,
+                    purpose=record.purpose,
+                    provider=record.provider,
+                    model=record.model,
+                    attempt=record.attempt,
+                    outcome=record.outcome,
+                    input_tokens=record.usage.input_tokens,
+                    output_tokens=record.usage.output_tokens,
+                    latency_ms=record.latency_ms,
+                    cost_usd=record.cost_usd,
+                )
             await s.commit()
 
 
@@ -102,18 +120,30 @@ async def run_investigation(
     async with sessionmaker() as s:
         repo = InvestigationRepository(s, scope)
         if await repo.cancel_queued(investigation_id):  # cancelled before any worker took it
+            await emit_in(
+                s,
+                scope,
+                investigation_id,
+                "status_changed",
+                status="cancelled",
+                reasons=["cancelled"],
+            )
             await s.commit()
             return RunOutcome(status="cancelled", reasons=["cancelled"])
         inv = await repo.try_lease(investigation_id, owner, LEASE_TTL)
         await s.commit()
     if inv is None:
         return RunOutcome(status="skipped", skipped="not_leased_or_not_active")
+    events = Events(sessionmaker, scope, investigation_id)
+    await events.emit("status_changed", status="running", reasons=[])
     if inv.attempts > MAX_RUN_ATTEMPTS:  # keeps dying (e.g. OOM-killed): stop, do not loop
         await dead_letter(sessionmaker, scope, investigation_id, "too_many_attempts", inv.attempts)
         return RunOutcome(status="failed", reasons=["too_many_attempts"])
 
-    guard = Guard(sessionmaker, scope, investigation_id)
-    deps = EngineDeps(sessionmaker=sessionmaker, llm=llm, hooks=hooks or {}, guard=guard)
+    guard = Guard(sessionmaker, scope, investigation_id, events=events)
+    deps = EngineDeps(
+        sessionmaker=sessionmaker, llm=llm, hooks=hooks or {}, guard=guard, events=events
+    )
     graph = build_graph(deps).compile(checkpointer=checkpointer)
     config: Any = {
         "configurable": {"thread_id": str(investigation_id)},
@@ -195,7 +225,12 @@ async def run_investigation(
             else:
                 status, reasons = "incomplete", [*reasons, why]
         async with sessionmaker() as s:
-            await InvestigationRepository(s, scope).finish(investigation_id, owner, status, reasons)
+            if await InvestigationRepository(s, scope).finish(
+                investigation_id, owner, status, reasons
+            ):
+                await emit_in(
+                    s, scope, investigation_id, "status_changed", status=status, reasons=reasons
+                )
             await s.commit()
         logger.info(
             "investigation_finished",
@@ -232,7 +267,15 @@ async def dead_letter(
         await InvestigationDeadLetterRepository(s, scope).record_once(
             investigation_id, error_class, attempts, last_node
         )
-        await repo.fail(investigation_id, [f"failed:{error_class}"])
+        if await repo.fail(investigation_id, [f"failed:{error_class}"]):
+            await emit_in(
+                s,
+                scope,
+                investigation_id,
+                "status_changed",
+                status="failed",
+                reasons=[f"failed:{error_class}"],
+            )
         await s.commit()
     logger.error(
         "investigation_dead_lettered",

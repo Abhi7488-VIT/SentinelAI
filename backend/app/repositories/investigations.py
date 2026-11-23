@@ -14,11 +14,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.investigation import (
     ACTIVE_STATUSES,
+    REPORT_SCHEMA_VERSION,
     Evidence,
     Hypothesis,
     HypothesisEvidence,
     Investigation,
     InvestigationDeadLetter,
+    InvestigationEvent,
+    InvestigationReport,
     VerificationCheck,
 )
 from app.repositories.base import TenantRepository
@@ -431,3 +434,66 @@ class VerificationCheckRepository(TenantRepository[VerificationCheck]):
             .order_by(VerificationCheck.hypothesis_id, VerificationCheck.id)
         )
         return list((await self.session.scalars(stmt)).all())
+
+
+class InvestigationEventRepository(TenantRepository[InvestigationEvent]):
+    model = InvestigationEvent
+
+    async def append(
+        self,
+        investigation_id: uuid.UUID,
+        event_type: str,
+        payload: dict[str, Any],
+        once_key: str | None = None,
+    ) -> None:
+        stmt = insert(InvestigationEvent).values(
+            org_id=self.ctx.org_id,
+            investigation_id=investigation_id,
+            type=event_type,
+            payload=payload,
+            once_key=once_key,
+        )
+        if once_key is not None:
+            stmt = stmt.on_conflict_do_nothing(
+                index_elements=["investigation_id", "once_key"],
+                index_where=InvestigationEvent.once_key.is_not(None),
+            )
+        await self.session.execute(stmt)
+
+    async def after(
+        self, investigation_id: uuid.UUID, after_id: int | None, limit: int
+    ) -> list[InvestigationEvent]:
+        """Events with id > `after_id`, oldest first (SSE replay and live tail)."""
+        stmt = self.scoped().where(InvestigationEvent.investigation_id == investigation_id)
+        if after_id is not None:
+            stmt = stmt.where(InvestigationEvent.id > after_id)
+        stmt = stmt.order_by(InvestigationEvent.id).limit(limit)
+        return list((await self.session.scalars(stmt)).all())
+
+
+class InvestigationReportRepository(TenantRepository[InvestigationReport]):
+    model = InvestigationReport
+
+    async def replace(
+        self, investigation_id: uuid.UUID, report: dict[str, Any], cited: list[str]
+    ) -> InvestigationReport:
+        await self.session.execute(
+            delete(InvestigationReport).where(
+                InvestigationReport.org_id == self.ctx.org_id,
+                InvestigationReport.investigation_id == investigation_id,
+            )
+        )
+        row = InvestigationReport(
+            org_id=self.ctx.org_id,
+            investigation_id=investigation_id,
+            schema_version=REPORT_SCHEMA_VERSION,
+            report=report,
+            cited_evidence_ids=cited,
+        )
+        self.session.add(row)
+        await self.session.flush()
+        return row
+
+    async def for_investigation(self, investigation_id: uuid.UUID) -> InvestigationReport | None:
+        stmt = self.scoped().where(InvestigationReport.investigation_id == investigation_id)
+        return (await self.session.scalars(stmt)).first()

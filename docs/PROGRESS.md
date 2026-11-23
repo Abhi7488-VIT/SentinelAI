@@ -24,10 +24,42 @@ tests use only those two.
 | T4 Hypotheses + verification | **done** (2026-11-23): see T4 notes. Ruff/mypy clean (221 files), backend **517 passed**. |
 | T5 Controls | **done** (2026-11-23): see T5 notes. Ruff/mypy clean (226 files), backend **536 passed**. Live `docker kill` of the worker and live cancel are part of T10 (**pending-live**); the SIGKILL test here kills a real worker process. |
 | T6 Injection defence | **done** (2026-11-23): see T6 notes. Ruff/mypy clean (228 files), backend **545 passed**. |
-| T7–T8 | not started (all buildable with unit/integration tests + FakeProvider) |
+| T7 Events, SSE, report | **done** (2026-11-23): see T7 notes. Ruff/mypy clean (235 files); backend full run 564 passed + 1 guard fix (re-run: 6/6); frontend typecheck clean. |
+| T8 API + isolation | not started (buildable with integration tests + FakeProvider) |
 | T9 Workspace UI | not started; UI code + Vitest buildable now; Playwright e2e is **pending-live** (needs the compose stack) |
 | T10 Live acceptance | **pending-live** (also needs `ANTHROPIC_API_KEY`, D1) |
 | T11 Docs + report | not started |
+
+### T7 notes (2026-11-23)
+- Migration `0014`: `investigation_events` (BIGINT identity id = monotonic SSE id; type CHECK;
+  payload ≤ 4 KiB CHECK; partial unique `once_key` for once-only events) and
+  `investigation_reports` (one per investigation, replaced on re-run, cited ids stored).
+- `app/investigation/events.py`: payloads only from per-type field allow-lists; credential-like
+  key segments refused; summaries ≤ 1,000 chars, other strings ≤ 200, lists ≤ 20.
+- Emitted: `status_changed` (running; terminal in the same transaction as the status), stage
+  started/completed, `tool_completed` (evidence id + summary), `llm_call` (usage only, with the
+  `llm_calls` row), `hypothesis_added`, `hypothesis_verified` (with the rows), `budget_warning`
+  (once per budget at 80 %), `rejected_by_allowlist`, `report_ready`.
+- SSE `GET /api/v1/orgs/{org_id}/investigations/{id}/events` (viewer+): replays `id >
+  Last-Event-ID` (header, or `?after=`), then polls the table (`SSE_POLL_SECONDS`, default 1 s;
+  heartbeat `SSE_HEARTBEAT_SECONDS`, 15 s); closes after the terminal status. Foreign/missing →
+  404 `investigation_not_found`; bad `Last-Event-ID` → 422. OpenAPI contract and frontend types
+  regenerated.
+- Report (`app/investigation/report.py`): the 14 sections of plan §8 (D8), all from stored rows.
+  **The summary is a deterministic template** over the verified primary hypothesis (no LLM call;
+  plan allowed an optional LLM narrative — not used). Usage is labelled "fake provider counts"
+  with no cost when the fake provider ran. **Citation gate:** any `ev_…` id anywhere in the report
+  that does not resolve → report not stored, run `incomplete: report_citation_check_failed`.
+  Rejected citations appear as a count (listing them would fail the gate by design).
+- With the report in place a run can now end `completed` (no incomplete reasons). The test
+  fixture's gateway has no logs/metrics, so its runs end `incomplete: no_telemetry:gateway:*`.
+- Tests: 14 unit (allow-lists, credential keys, caps, citation gate, SSE frame, Last-Event-ID) +
+  6 integration (event order/monotonic ids/no text or secrets/one budget warning; report 14
+  sections + citations resolve + summary cites primary evidence; made-up id in model prose →
+  report refused; SSE replay, resume by header and query, terminal close, 422; live run streamed;
+  tenant scoping 404/401). The OpenAPI-driven isolation guard now covers the SSE route.
+- Fixed while testing: a mid-branch crash test raced the new `stage_completed` write (added a
+  `<node>.done` hook point after it).
 
 ### T6 notes (2026-11-23)
 - Built on T3's wrapping (`app/investigation/prompting.py`: every telemetry-derived string and every
