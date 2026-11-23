@@ -9,6 +9,7 @@ from app.models.detection import (
 )
 from app.models.graph import EdgeSource, ServiceEdge
 from app.models.incident import Incident, IncidentDetection, IncidentEvent, IncidentService
+from app.models.investigation import Evidence, Investigation
 from app.models.llm_call import LLMCall
 from app.models.organization import Organization, OrganizationMember, Role
 from app.models.project import Project
@@ -31,6 +32,7 @@ __all__ = [
     "Detection",
     "DetectorState",
     "EdgeSource",
+    "Evidence",
     "HealthStatus",
     "Incident",
     "IncidentDetection",
@@ -38,6 +40,7 @@ __all__ = [
     "IncidentService",
     "IngestBatch",
     "IngestUsage",
+    "Investigation",
     "LLMCall",
     "LogRecord",
     "MetricPoint",

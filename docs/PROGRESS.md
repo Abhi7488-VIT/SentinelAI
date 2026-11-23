@@ -19,10 +19,36 @@ tests use only those two.
 |---|---|
 | T0 S2–S5 detection check | **pending-live** (S3–S5 need the live testbed). S2 run `20261120T101344Z-5c6f9c`: detected, but split into 2 incidents (Phase 3 correlation gap, `docs/evidence/phase-4/t0-slow-sql-*`), reported per R1, awaiting your decision. S3–S5 not run. |
 | T1 LLM provider | **done** (2026-11-23): `anthropic==2.6.0` added to `pyproject.toml` + `uv.lock` (uv reached PyPI this session); `uv sync --locked` OK; ruff/format/mypy clean (187 files), **453 passed**. |
-| T2–T8 | not started (all buildable with unit/integration tests + FakeProvider) |
+| T2 Evidence store + tools | **done** (2026-11-23): see T2 notes. Ruff/mypy clean (204 files), backend **480 passed**. |
+| T3–T8 | not started (all buildable with unit/integration tests + FakeProvider) |
 | T9 Workspace UI | not started; UI code + Vitest buildable now; Playwright e2e is **pending-live** (needs the compose stack) |
 | T10 Live acceptance | **pending-live** (also needs `ANTHROPIC_API_KEY`, D1) |
 | T11 Docs + report | not started |
+
+### T2 notes (2026-11-23)
+- Migration `0010`: `investigations` (identity, incident, status; one active per incident via a
+  partial unique index; budgets/lease/cancel columns come in T3/T5) and `evidence` (`ev_` + 12
+  base32 id, composite FK to the investigation, `UNIQUE (investigation_id, dedup_key)`,
+  CHECKs on id format, kind, window order, summary ≤ 1,000 chars, `data` ≤ 16 KiB).
+- `EvidenceService` (`app/investigation/evidence.py`) is the only creator; an architecture test
+  fails if anything outside `app/investigation/tools/` imports it. Re-running a tool with the same
+  normalised parameters returns the existing row.
+- Six read-only tools in `app/investigation/tools/` (`log_query`, `metric_query`,
+  `trace_analysis`, `deploy_lookup`, `dependency_lookup`, `detection_ref`): windows ≤ 6 h,
+  `SET LOCAL statement_timeout = 5000`, row limits, service ids re-checked against the org.
+  Reduction is plain Python/SQL (`app/investigation/reduce.py`): log templates + clusters,
+  metric deltas + onset, critical path with self-time, exception signatures with top frame.
+  Empty results are recorded as explicit evidence ("No log records … in …").
+- **EXPLAIN finding, fixed:** the first per-operation span query (`kind = ANY(...)`) matched none
+  of the partial span indexes. It is now two branches repeating `ix_spans_server_window` /
+  `ix_spans_db_client_window` predicates; no new index on the ingest path. The test EXPLAINs all
+  10 tool queries on seeded, ANALYZEd data: partition pruning to the window's day(s), no seq scan
+  with `enable_seqscan=off`, and each span query uses its intended index.
+- Tests: 10 unit (reduction, ids, dedup keys), 2 architecture, 15 integration (each tool,
+  dedup, empty window, size cap + DB CHECK, window validation, cross-org service/incident/
+  investigation/evidence, one-active-per-incident, EXPLAIN).
+- Limitation: `trace_analysis` covers inbound SERVER and database CLIENT operations; non-database
+  CLIENT calls are measured from the callee side by `dependency_lookup`.
 
 ### T1 notes (2026-11-20)
 - Tests: backend **453 passed** (unit 250 incl. 21 new Anthropic-provider tests over a mocked

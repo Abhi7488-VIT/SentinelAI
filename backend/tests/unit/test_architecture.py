@@ -66,3 +66,43 @@ def test_services_and_routes_do_not_build_sql() -> None:
         if (names := _sqlalchemy_builder_imports(p))
     }
     assert not offenders, offenders
+
+
+def _imports_of(path: Path) -> set[str]:
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    found: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom) and node.module:
+            found.add(node.module)
+            found |= {f"{node.module}.{a.name}" for a in node.names}
+        elif isinstance(node, ast.Import):
+            found |= {a.name for a in node.names}
+    return found
+
+
+def test_only_investigation_tools_create_evidence() -> None:
+    """Evidence is created only by deterministic tools (Phase 4 plan §4, invariant 1)."""
+    tools_dir = APP_DIR / "investigation" / "tools"
+    evidence_mod = APP_DIR / "investigation" / "evidence.py"
+    offenders = sorted(
+        str(p.relative_to(APP_DIR))
+        for p in APP_DIR.rglob("*.py")
+        if p != evidence_mod
+        and tools_dir not in p.parents
+        and any(
+            name == "app.investigation.evidence" or name.startswith("app.investigation.evidence.")
+            for name in _imports_of(p)
+        )
+    )
+    assert not offenders, offenders
+    # Sanity: the tools really do use it (the guard would be vacuous otherwise).
+    assert any("app.investigation.evidence" in _imports_of(p) for p in tools_dir.rglob("*.py"))
+
+
+def test_investigation_engine_does_not_build_sql() -> None:
+    offenders = {
+        str(p.relative_to(APP_DIR)): names
+        for p in (APP_DIR / "investigation").rglob("*.py")
+        if (names := _sqlalchemy_builder_imports(p))
+    }
+    assert not offenders, offenders

@@ -12,7 +12,7 @@ import uuid
 from collections.abc import Sequence
 from typing import Any, ClassVar
 
-from sqlalchemy import ColumnElement, Select, Uuid, literal, select, tuple_
+from sqlalchemy import ColumnElement, Select, String, Uuid, literal, select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.pagination import (
@@ -59,7 +59,9 @@ async def keyset_page[M: Base](
     return rows, next_cursor
 
 
-def _cursor_id(position: Cursor, id_col: ColumnElement[Any]) -> uuid.UUID | int:
+def _cursor_id(position: Cursor, id_col: ColumnElement[Any]) -> uuid.UUID | int | str:
+    if isinstance(id_col.type, String):
+        return position.id
     try:
         return uuid.UUID(position.id) if isinstance(id_col.type, Uuid) else int(position.id)
     except ValueError as exc:

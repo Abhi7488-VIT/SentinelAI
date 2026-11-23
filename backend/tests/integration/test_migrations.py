@@ -38,6 +38,8 @@ EXPECTED_TABLES = {
     "incident_services",
     "incident_events",
     "llm_calls",
+    "investigations",
+    "evidence",
 }
 
 
