@@ -77,6 +77,21 @@ from app.repositories.services import ServiceRepository
 
 logger = get_logger("app.investigation.graph")
 
+# Tools each node may run (plan §5). Fixed in code; enforced on every call by `tool()`.
+NODE_TOOLS: dict[str, frozenset[str]] = {
+    "planner": frozenset({"detection_ref", "dependency_lookup", "deploy_lookup"}),
+    "telemetry": frozenset({"log_query", "metric_query", "trace_analysis", "deploy_lookup"}),
+    "dependency": frozenset({"dependency_lookup", "trace_analysis", "deploy_lookup"}),
+    "analyst": frozenset(),
+    "verification": frozenset(),
+    "report": frozenset(),
+}
+
+
+class ToolNotAllowedError(RuntimeError):
+    """A programming error: a node called a tool outside its allow-list."""
+
+
 MAX_FOCUS = 5
 MAX_CANDIDATES = 20
 PRE_ONSET = timedelta(minutes=1)
@@ -186,10 +201,28 @@ def build_graph(deps: EngineDeps) -> StateGraph[InvestigationState]:
     async def tool[**P](
         fn: Callable[P, Awaitable[Evidence]], *args: P.args, **kw: P.kwargs
     ) -> Evidence:
-        """Every tool call is counted and checked against budgets/cancellation first."""
+        """Every tool call is allow-listed for its node, then counted and checked against
+        budgets/cancellation. The tool set of a node is fixed in code (`NODE_TOOLS`); nothing an
+        LLM outputs can name or select a tool (invariant 3)."""
+        ctx = args[0]
+        node = ctx.node if isinstance(ctx, ToolContext) else "?"
+        if fn.__name__ not in NODE_TOOLS.get(node, frozenset()):
+            raise ToolNotAllowedError(f"{fn.__name__} is not allowed in {node}")
         if deps.guard is not None:
             await deps.guard.before_tool()
         return await fn(*args, **kw)
+
+    def flagged(node: str, rejected: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Log every allow-list / citation rejection (T7 also persists them as
+        `rejected_by_allowlist` events). Values are truncated ids, never free text."""
+        for r in rejected:
+            logger.warning(
+                "rejected_by_allowlist",
+                investigation_node=node,
+                kind=r.get("kind"),
+                value=str(r.get("value", ""))[:40],
+            )
+        return rejected
 
     async def call_llm[T: BaseModel](
         state: InvestigationState,
@@ -336,7 +369,7 @@ def build_graph(deps: EngineDeps) -> StateGraph[InvestigationState]:
             "focus": focus,
             "plan_source": plan_source,
             "evidence_ids": [e.id for e in evidence],
-            "rejected": rejected,
+            "rejected": flagged("planner", rejected),
             "stages": ["planner"],
         }
 
@@ -415,7 +448,7 @@ def build_graph(deps: EngineDeps) -> StateGraph[InvestigationState]:
         return {
             "evidence_ids": [e.id for e in evidence],
             "findings": findings,
-            "rejected": rejected,
+            "rejected": flagged("telemetry", rejected),
             "incomplete_reasons": missing
             + ([reason] if reason else [])
             + ([f"evidence_not_shown:telemetry:{len(left_out)}"] if left_out else []),
@@ -474,7 +507,7 @@ def build_graph(deps: EngineDeps) -> StateGraph[InvestigationState]:
         return {
             "evidence_ids": [e.id for e in evidence],
             "findings": findings,
-            "rejected": rejected,
+            "rejected": flagged("dependency", rejected),
             "incomplete_reasons": [reason] if reason else [],
             "stages": ["dependency"],
         }
@@ -551,7 +584,7 @@ def build_graph(deps: EngineDeps) -> StateGraph[InvestigationState]:
             )
         return {
             "hypotheses": hypotheses,
-            "rejected": rejected,
+            "rejected": flagged("analyst", rejected),
             "incomplete_reasons": [f"evidence_not_shown:analyst:{len(left_out)}"]
             if left_out
             else [],

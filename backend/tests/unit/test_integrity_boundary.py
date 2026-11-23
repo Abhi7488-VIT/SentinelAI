@@ -63,3 +63,31 @@ def test_backend_never_references_ground_truth_or_scenarios() -> None:
         if hits:
             offenders[str(path.relative_to(BACKEND_DIR))] = hits
     assert not offenders, f"backend code references testbed answers: {offenders}"
+
+
+def _scenario_titles() -> list[str]:
+    return [
+        str(json.loads(p.read_text(encoding="utf-8"))["title"])
+        for p in sorted(SCENARIOS_DIR.glob("*.json"))
+    ]
+
+
+def test_prompts_and_investigation_code_never_name_a_scenario() -> None:
+    """Phase 4 plan §1: prompts and the investigation engine contain no scenario id or title, so
+    nothing the model is told (or the checks use) is derived from a scenario."""
+    titles = _scenario_titles()
+    assert len(titles) >= 5
+    terms = [*_scenario_ids(), *titles]
+    pattern = re.compile("|".join(re.escape(t) for t in terms), re.IGNORECASE)
+    files = [
+        *(BACKEND_DIR / "app" / "llm" / "prompts").glob("*"),
+        *(BACKEND_DIR / "app" / "investigation").rglob("*.py"),
+    ]
+    files = [f for f in files if f.is_file() and f.suffix in GUARDED_SUFFIXES]
+    assert any(f.suffix == ".txt" for f in files)
+    offenders = {
+        str(f.relative_to(BACKEND_DIR)): sorted(set(pattern.findall(f.read_text(encoding="utf-8"))))
+        for f in files
+        if pattern.search(f.read_text(encoding="utf-8"))
+    }
+    assert not offenders, offenders
