@@ -20,10 +20,45 @@ tests use only those two.
 | T0 S2–S5 detection check | **pending-live** (S3–S5 need the live testbed). S2 run `20261120T101344Z-5c6f9c`: detected, but split into 2 incidents (Phase 3 correlation gap, `docs/evidence/phase-4/t0-slow-sql-*`), reported per R1, awaiting your decision. S3–S5 not run. |
 | T1 LLM provider | **done** (2026-11-23): `anthropic==2.6.0` added to `pyproject.toml` + `uv.lock` (uv reached PyPI this session); `uv sync --locked` OK; ruff/format/mypy clean (187 files), **453 passed**. |
 | T2 Evidence store + tools | **done** (2026-11-23): see T2 notes. Ruff/mypy clean (204 files), backend **480 passed**. |
-| T3–T8 | not started (all buildable with unit/integration tests + FakeProvider) |
+| T3 Graph skeleton + checkpoints | **done** (2026-11-23): see T3 notes. Ruff/mypy clean (217 files), backend **499 passed**. Compose wiring (migrate → checkpoint setup, `investigation-worker`) is **pending-live**: validated with `docker compose config` only. |
+| T4–T8 | not started (all buildable with unit/integration tests + FakeProvider) |
 | T9 Workspace UI | not started; UI code + Vitest buildable now; Playwright e2e is **pending-live** (needs the compose stack) |
 | T10 Live acceptance | **pending-live** (also needs `ANTHROPIC_API_KEY`, D1) |
 | T11 Docs + report | not started |
+
+### T3 notes (2026-11-23)
+- Dependencies (plan §11, exact pins): `langgraph==1.2.20`, `langgraph-checkpoint-postgres==3.2.0`,
+  `psycopg[binary]==3.3.8`, `psycopg-pool==3.3.3`. Transitively `langchain-core` and `langsmith`
+  come in; LangSmith tracing is refused at run start if any `LANGSMITH_*/LANGCHAIN_TRACING*` flag
+  is on (it would send graph state to a third party).
+- Graph (`app/investigation/graph.py`): planner → {telemetry ∥ dependency} → analyst →
+  verification → report. State holds ids/names/window/findings/hypotheses only. LLM output is
+  filtered: focus/subject services must be in the enumerated candidate set, cited ids must exist
+  in `evidence` for this investigation; drops are recorded in `rejected`. Planner LLM failure →
+  deterministic fallback labelled `fallback:<reason>`; analyst failure → `llm_*:analyst` reason.
+- **Verification and report are placeholders** until T4/T7: they add `verification_not_run` and
+  `report_not_generated`, so every T3 run ends `incomplete`, never `completed`.
+- Checkpoints: `AsyncPostgresSaver` in schema `langgraph` (search_path on its psycopg connection),
+  `python -m app.cli.checkpoint_setup` (idempotent) added to the `migrate` service.
+- Runner: conditional-UPDATE lease (60 s TTL, renewed every 15 s; a run that loses it stops),
+  resume from checkpoint, terminal status by lease holder only; on an exception the lease is
+  released so a retry resumes at once. Celery task `investigation.run` routed to queue
+  `investigations`, consumed by a new `investigation-worker` service (same image, concurrency 2).
+- Migration `0011`: lease + lifecycle columns (`incomplete_reasons`, `started_at`, `finished_at`),
+  `lease_pair` CHECK, `llm_calls` → `investigations` composite FK (T1 tests now create a real
+  investigation). Fixed during the task: the CHECK's downgrade name (Alembic re-applied the naming
+  convention).
+- Tests: 11 unit (block escaping, prompts versioned + data rule, taxonomy ↔ schema, no status in
+  LLM output, windows, tracing guard) + 8 integration: end-to-end; investigators proven concurrent
+  (mutual rendezvous would deadlock if sequential); crash in analyst → resume runs only analyst,
+  evidence unchanged; crash mid-branch → only the crashed node re-runs, finished sibling's writes
+  kept, evidence dedup keys identical to an uninterrupted run; lease held/expired/finished; planner
+  fallback; analyst failure; foreign org cannot run it. The ADR 0003 guard now also scans prompt
+  `.txt` files.
+- Deviation from plan §5: the planner LLM picks focus *services* only; windows are computed
+  deterministically (incident window [onset − 1 min, last activity + 15 min] ≤ 6 h, 30-min
+  baseline before it). Budgets beyond the step cap (`recursion_limit` 30 → `budget:steps`),
+  cancellation, task retries/dead-letter and the SIGKILL test are T5.
 
 ### T2 notes (2026-11-23)
 - Migration `0010`: `investigations` (identity, incident, status; one active per incident via a

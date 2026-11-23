@@ -25,6 +25,9 @@ def configure_celery(app: Celery, settings: Settings) -> Celery:
         timezone="UTC",
         enable_utc=True,
         task_default_queue="default",
+        # Investigations run in their own worker (own concurrency), so a long investigation
+        # never delays a detection tick (Phase 4 plan §2).
+        task_routes={"investigation.run": {"queue": "investigations"}},
         beat_schedule={
             # Partitions are created days ahead, so a missed run or two is harmless.
             "telemetry-maintain-partitions": {

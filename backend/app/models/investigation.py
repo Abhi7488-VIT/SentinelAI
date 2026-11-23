@@ -1,7 +1,7 @@
 """Investigations and their evidence (Phase 4 plan §4, §9).
 
-T2 creates the `investigations` row with the columns evidence needs (identity, tenant, incident,
-status); later tasks add budgets, lease and cancellation columns in their own migrations.
+T2 created the `investigations` row (identity, tenant, incident, status); T3 adds the lease (one
+worker runs an investigation at a time) and lifecycle columns; T5 adds budgets and cancellation.
 
 Evidence is created only by deterministic tools (`app/investigation/tools/`), never by an LLM
 and never through the API. `(investigation_id, dedup_key)` is unique, so a re-run tool (crash
@@ -76,6 +76,13 @@ class Investigation(TimestampMixin, Base):
         ),
         Index("ix_investigations_org_id_created_at_id", "org_id", "created_at", "id"),
         Index("ix_investigations_org_id_incident_id", "org_id", "incident_id"),
+        CheckConstraint("(lease_owner IS NULL) = (lease_expires_at IS NULL)", name="lease_pair"),
+        # Expired-lease sweep (T5): running investigations by lease expiry.
+        Index(
+            "ix_investigations_running_lease",
+            "lease_expires_at",
+            postgresql_where=text("status = 'running'"),
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -91,6 +98,15 @@ class Investigation(TimestampMixin, Base):
     created_by: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL")
     )
+    # Exactly what is missing when the run ends `incomplete` (e.g. `no_telemetry:orders:logs`).
+    incomplete_reasons: Mapped[list[str]] = mapped_column(
+        JSONB, nullable=False, server_default=text("'[]'::jsonb")
+    )
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Lease: the worker that runs it, until when (renewed while running; plan §7 crash resume).
+    lease_owner: Mapped[str | None] = mapped_column(String(128))
+    lease_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class Evidence(Base):

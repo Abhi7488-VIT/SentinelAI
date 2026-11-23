@@ -17,6 +17,7 @@ from app.llm.types import CallContext, LLMRequest
 from app.repositories.base import TenantIsolationError
 from app.repositories.llm_calls import LLMCallRepository
 from tests.integration.factories import register
+from tests.integration.investigation_support import create_investigation
 from tests.unit.test_llm_client import GOOD, SECRET_TEXT, Finding
 
 pytestmark = pytest.mark.integration
@@ -49,7 +50,7 @@ async def test_every_attempt_is_stored_with_usage_and_no_text(
     client: httpx.AsyncClient, session: AsyncSession
 ) -> None:
     org = uuid.UUID((await register(client, "Llm")).org_id)
-    investigation = uuid.uuid4()
+    investigation = await create_investigation(session, org)
     repo = LLMCallRepository(session, SystemScope(org, "test"))
     # Priced as the real model so cost is computed and stored (the fake text is still fake).
     provider = FakeProvider([Respond("not json"), Respond(GOOD)], model="claude-sonnet-5-5")
@@ -72,7 +73,7 @@ async def test_every_attempt_is_stored_with_usage_and_no_text(
 
 async def test_failed_call_rows_survive(client: httpx.AsyncClient, session: AsyncSession) -> None:
     org = uuid.UUID((await register(client, "LlmFail")).org_id)
-    investigation = uuid.uuid4()
+    investigation = await create_investigation(session, org)
     repo = LLMCallRepository(session, SystemScope(org, "test"))
     with pytest.raises(LLMInvalidOutputError):
         await _client(FakeProvider([Respond("x"), Respond("y")]), repo).generate(
@@ -86,7 +87,7 @@ async def test_failed_call_rows_survive(client: httpx.AsyncClient, session: Asyn
 async def test_records_are_tenant_scoped(client: httpx.AsyncClient, session: AsyncSession) -> None:
     org_a = uuid.UUID((await register(client, "LlmA")).org_id)
     org_b = uuid.UUID((await register(client, "LlmB")).org_id)
-    investigation = uuid.uuid4()
+    investigation = await create_investigation(session, org_a)
     repo_a = LLMCallRepository(session, SystemScope(org_a, "test"))
     repo_b = LLMCallRepository(session, SystemScope(org_b, "test"))
 

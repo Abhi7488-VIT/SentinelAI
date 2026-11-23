@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+import asyncio
+import os
 import random
+import socket
+import uuid
 from collections.abc import Callable
 from dataclasses import asdict
 from datetime import UTC, datetime
@@ -14,6 +18,7 @@ from app.core.config import Settings, get_settings
 from app.core.logging import get_logger
 from app.ingest.batch import decode_batch
 from app.ingest.dead_letter import dead_letter
+from app.investigation.execute import execute as execute_investigation
 from app.services.detection import run_tick
 from app.services.ingest_writer import WriteResult, write_batch
 from app.services.service_graph import discover_edges
@@ -131,3 +136,25 @@ def write_ingest_batch(self: Any, payload: str) -> dict[str, Any]:
             error=type(exc).__name__,
         )
         raise self.retry(exc=exc, countdown=countdown) from exc
+
+
+@shared_task(
+    name="investigation.run",
+    bind=True,
+    acks_late=True,
+    time_limit=900,  # above the 10-min wall-clock budget (D3), enforced in-run by T5
+    soft_time_limit=870,
+)
+def run_investigation_task(self: Any, org_id: str, investigation_id: str) -> dict[str, Any]:
+    """Consumes the `investigations` queue. Safe to redeliver: lease + checkpoint resume +
+    evidence dedup. `org_id` comes from the row the API created, never from telemetry."""
+    owner = f"{socket.gethostname()}:{os.getpid()}:{self.request.id}"[:128]
+    outcome = asyncio.run(
+        execute_investigation(get_settings(), uuid.UUID(org_id), uuid.UUID(investigation_id), owner)
+    )
+    return {
+        "status": outcome.status,
+        "reasons": outcome.reasons,
+        "resumed": outcome.resumed,
+        "skipped": outcome.skipped,
+    }

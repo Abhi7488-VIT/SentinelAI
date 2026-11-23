@@ -4,17 +4,97 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Sequence
+from datetime import timedelta
 from typing import Any
 
-from sqlalchemy import ColumnElement
+from sqlalchemy import ColumnElement, func, update
 from sqlalchemy.dialects.postgresql import insert
 
-from app.models.investigation import Evidence, Investigation
+from app.models.investigation import ACTIVE_STATUSES, Evidence, Investigation
 from app.repositories.base import TenantRepository
 
 
 class InvestigationRepository(TenantRepository[Investigation]):
     model = Investigation
+
+    async def try_lease(
+        self, investigation_id: uuid.UUID, owner: str, ttl: timedelta
+    ) -> Investigation | None:
+        """Take (or keep) the lease of an active investigation; None if someone else holds a
+        live lease or it is no longer active. `queued` becomes `running` on first lease."""
+        free = (
+            Investigation.lease_expires_at.is_(None)
+            | (Investigation.lease_expires_at < func.now())
+            | (Investigation.lease_owner == owner)
+        )
+        stmt = (
+            update(Investigation)
+            .where(
+                Investigation.org_id == self.ctx.org_id,
+                Investigation.id == investigation_id,
+                Investigation.status.in_(ACTIVE_STATUSES),
+                free,
+            )
+            .values(
+                lease_owner=owner,
+                lease_expires_at=func.now() + ttl,
+                status="running",
+                started_at=func.coalesce(Investigation.started_at, func.now()),
+            )
+            .returning(Investigation)
+            .execution_options(synchronize_session=False)
+        )
+        return (await self.session.scalars(stmt)).first()
+
+    async def renew_lease(self, investigation_id: uuid.UUID, owner: str, ttl: timedelta) -> bool:
+        stmt = (
+            update(Investigation)
+            .where(
+                Investigation.org_id == self.ctx.org_id,
+                Investigation.id == investigation_id,
+                Investigation.lease_owner == owner,
+            )
+            .values(lease_expires_at=func.now() + ttl)
+            .returning(Investigation.id)
+            .execution_options(synchronize_session=False)
+        )
+        return (await self.session.scalar(stmt)) is not None
+
+    async def release_lease(self, investigation_id: uuid.UUID, owner: str) -> None:
+        """Give the lease up without finishing (the run stays `running`, resumable at once)."""
+        await self.session.execute(
+            update(Investigation)
+            .where(
+                Investigation.org_id == self.ctx.org_id,
+                Investigation.id == investigation_id,
+                Investigation.lease_owner == owner,
+            )
+            .values(lease_owner=None, lease_expires_at=None)
+            .execution_options(synchronize_session=False)
+        )
+
+    async def finish(
+        self, investigation_id: uuid.UUID, owner: str, status: str, reasons: list[str]
+    ) -> bool:
+        """Terminal status, only by the lease holder; clears the lease."""
+        stmt = (
+            update(Investigation)
+            .where(
+                Investigation.org_id == self.ctx.org_id,
+                Investigation.id == investigation_id,
+                Investigation.lease_owner == owner,
+            )
+            .values(
+                status=status,
+                incomplete_reasons=reasons,
+                finished_at=func.now(),
+                lease_owner=None,
+                lease_expires_at=None,
+            )
+            .returning(Investigation.id)
+            .execution_options(synchronize_session=False)
+        )
+        return (await self.session.scalar(stmt)) is not None
 
 
 class EvidenceRepository(TenantRepository[Evidence]):
@@ -51,6 +131,24 @@ class EvidenceRepository(TenantRepository[Evidence]):
             Evidence.investigation_id == investigation_id, Evidence.id == evidence_id
         )
         return (await self.session.scalars(stmt)).first()
+
+    async def many(self, investigation_id: uuid.UUID, ids: Sequence[str]) -> list[Evidence]:
+        """These evidence rows of the investigation, in the given order (unknown ids skipped)."""
+        if not ids:
+            return []
+        stmt = self.scoped().where(
+            Evidence.investigation_id == investigation_id, Evidence.id.in_(list(set(ids)))
+        )
+        found = {e.id: e for e in (await self.session.scalars(stmt)).all()}
+        return [found[i] for i in dict.fromkeys(ids) if i in found]
+
+    async def count_for(self, investigation_id: uuid.UUID) -> int:
+        stmt = (
+            self.scoped()
+            .where(Evidence.investigation_id == investigation_id)
+            .with_only_columns(func.count())
+        )
+        return int(await self.session.scalar(stmt) or 0)
 
     async def existing_ids(self, investigation_id: uuid.UUID, ids: Sequence[str]) -> set[str]:
         """Which of `ids` exist for this investigation (citation check, invariant 1)."""

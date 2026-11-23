@@ -1,7 +1,7 @@
 """One row per LLM call attempt (Phase 4 plan §3): usage, latency, cost, outcome.
 
 Never holds prompt or response text (decision D7), nor any credential (A4). `investigation_id`
-gets its foreign key when the investigations table exists (T3).
+reaches its investigation through a composite FK (same org), or is NULL for calls outside one.
 """
 
 from __future__ import annotations
@@ -15,6 +15,7 @@ from sqlalchemy import (
     CheckConstraint,
     DateTime,
     ForeignKey,
+    ForeignKeyConstraint,
     Identity,
     Index,
     Integer,
@@ -53,6 +54,12 @@ class LLMCall(Base):
             name="non_negative",
         ),
         Index("ix_llm_calls_org_investigation", "org_id", "investigation_id", "id"),
+        ForeignKeyConstraint(
+            ["org_id", "investigation_id"],
+            ["investigations.org_id", "investigations.id"],
+            ondelete="CASCADE",
+            name="fk_llm_calls_investigation",
+        ),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)

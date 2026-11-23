@@ -16,6 +16,8 @@ BACKEND_DIR = Path(__file__).resolve().parents[2]
 REPO_ROOT = BACKEND_DIR.parent
 SCENARIOS_DIR = REPO_ROOT / "testbed" / "scenarios"
 # Production code and schema history. Tests are excluded: this file names the terms itself.
+# `.txt`: versioned LLM prompts (Phase 4) must not name scenarios either.
+GUARDED_SUFFIXES = {".py", ".json", ".sql", ".txt"}
 GUARDED_DIRS = [BACKEND_DIR / "app", BACKEND_DIR / "migrations", BACKEND_DIR / "scripts"]
 
 FORBIDDEN_TERMS = [
@@ -42,7 +44,7 @@ def _scenario_ids() -> list[str]:
 def _guarded_files() -> list[Path]:
     files: list[Path] = []
     for directory in GUARDED_DIRS:
-        files.extend(p for p in directory.rglob("*") if p.suffix in {".py", ".json", ".sql"})
+        files.extend(p for p in directory.rglob("*") if p.suffix in GUARDED_SUFFIXES)
     return files
 
 

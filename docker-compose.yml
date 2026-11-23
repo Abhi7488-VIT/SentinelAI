@@ -72,7 +72,7 @@ services:
     build: *backend-build
     image: sentinelai-backend:dev
     # Migrations, then create today's (and upcoming) telemetry partitions before anything ingests.
-    command: ["sh", "-c", "alembic upgrade head && python -m app.cli.telemetry_maintenance"]
+    command: ["sh", "-c", "alembic upgrade head && python -m app.cli.telemetry_maintenance && python -m app.cli.checkpoint_setup"]
     environment: *backend-env
     depends_on:
       postgres:
@@ -145,6 +145,28 @@ services:
         condition: service_completed_successfully
     healthcheck:
       test: ["CMD-SHELL", "celery -A app.worker.celery_app inspect ping -d celery@$$HOSTNAME --timeout 10 | grep -q pong"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+
+  # Investigation worker (Phase 4): consumes only the `investigations` queue with its own
+  # concurrency, so a long investigation never delays a detection tick. Same image as `worker`.
+  investigation-worker:
+    build: *backend-build
+    image: sentinelai-backend:dev
+    command: ["celery", "-A", "app.worker.celery_app", "worker", "-Q", "investigations", "-n", "investigations@%h", "--loglevel=INFO", "--concurrency=2"]
+    environment: *backend-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A app.worker.celery_app inspect ping -d investigations@$$HOSTNAME --timeout 10 | grep -q pong"]
       interval: 30s
       timeout: 20s
       retries: 3
