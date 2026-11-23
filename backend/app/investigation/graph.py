@@ -11,8 +11,9 @@
   is dropped and recorded in `rejected` (T6 turns these into `rejected_by_allowlist` events).
 - Every id an LLM cites is checked against the `evidence` table for this investigation and org;
   unknown ids are removed and recorded (invariant 1).
-- Verification and report are placeholders until T4/T7: they add `verification_not_run`, so a
-  T3 run ends `incomplete`, never `completed` (invariant 2: no unverified claim of success).
+- Verification (T4) is deterministic (`app.investigation.verification`): it alone sets hypothesis
+  status, rank and primary. The report is a placeholder until T7 (`report_not_generated`), so a
+  run still ends `incomplete`, never `completed` (invariant 2).
 """
 
 from __future__ import annotations
@@ -48,6 +49,8 @@ from app.investigation.tools import (
     metric_query,
     trace_analysis,
 )
+from app.investigation.verification import EvidenceView, verify
+from app.investigation.verification import rank as rank_verdicts
 from app.llm.client import LLMClient
 from app.llm.errors import (
     LLMError,
@@ -62,7 +65,11 @@ from app.llm.prompts import Prompt, load_prompt
 from app.llm.types import CallContext, LLMRequest, Purpose
 from app.models.investigation import Evidence
 from app.repositories.incidents import IncidentRepository, IncidentServiceRepository
-from app.repositories.investigations import EvidenceRepository
+from app.repositories.investigations import (
+    EvidenceRepository,
+    HypothesisRepository,
+    HypothesisWrite,
+)
 from app.repositories.service_graph import ServiceEdgeRepository
 from app.repositories.services import ServiceRepository
 
@@ -514,8 +521,86 @@ def build_graph(deps: EngineDeps) -> StateGraph[InvestigationState]:
         }
 
     async def verification(state: InvestigationState) -> dict[str, Any]:
-        # T4 replaces this with the deterministic checks of the taxonomy.
-        return {"incomplete_reasons": ["verification_not_run"], "stages": ["verification"]}
+        """Deterministic: citation check, category checks, status, ranking (plan §6). Persists
+        hypotheses, citations and check results; a re-run replaces them (same inputs, same rows)."""
+        inv_id, scope = _ids(state)
+        candidates = state.get("candidates", {})
+        drafts = state.get("hypotheses", [])
+        async with deps.sessionmaker() as s:
+            rows = await EvidenceRepository(s, scope).many(inv_id, state.get("evidence_ids", []))
+            views = [EvidenceView(e.id, e.kind, e.data) for e in rows]
+            verdicts = [
+                (
+                    i,
+                    verify(
+                        category=h["category"],
+                        subject_names={
+                            candidates[x] for x in h["subject_service_ids"] if x in candidates
+                        },
+                        supporting=h["supporting_evidence_ids"],
+                        contradicting=h["contradicting_evidence_ids"],
+                        evidence=views,
+                    ),
+                )
+                for i, h in enumerate(drafts)
+            ]
+            order = rank_verdicts(verdicts)
+            by_index = dict(verdicts)
+            primary = order[0] if order and by_index[order[0]].status != "inconclusive" else None
+            writes = []
+            verified: list[dict[str, Any]] = []
+            for position, i in enumerate(order, start=1):
+                h, v = drafts[i], by_index[i]
+                rejected = sorted({*h.get("rejected_citations", []), *v.rejected})
+                checks = [(c.name, c.result, c.detail, list(c.evidence_ids)) for c in v.checks]
+                writes.append(
+                    HypothesisWrite(
+                        proposed_rank=i,
+                        rank=position,
+                        is_primary=i == primary,
+                        category=h["category"],
+                        subject_service_ids=h["subject_service_ids"],
+                        statement=h["statement"],
+                        status=v.status,
+                        status_reason=v.reason,
+                        checks_passed=v.passed,
+                        checks_applicable=v.applicable,
+                        model_confidence=float(h["model_confidence"]),
+                        rejected_citations=rejected,
+                        missing_evidence=h.get("missing_evidence", []),
+                        supporting=list(v.supporting),
+                        contradicting=list(v.contradicting),
+                        checks=checks,
+                    )
+                )
+                verified.append(
+                    {
+                        **h,
+                        "supporting_evidence_ids": list(v.supporting),
+                        "contradicting_evidence_ids": list(v.contradicting),
+                        "rejected_citations": rejected,
+                        "status": v.status,
+                        "status_reason": v.reason,
+                        "rank": position,
+                        "is_primary": i == primary,
+                        "checks": [
+                            {"name": n, "result": r, "detail": d, "evidence_ids": e}
+                            for n, r, d, e in checks
+                        ],
+                    }
+                )
+            await HypothesisRepository(s, scope).replace_for_investigation(inv_id, writes)
+            await s.commit()
+        reasons = (
+            []
+            if drafts
+            or any(
+                r.startswith("llm_") and r.endswith(":analyst")
+                for r in state.get("incomplete_reasons", [])
+            )
+            else ["no_hypotheses"]
+        )
+        return {"hypotheses": verified, "incomplete_reasons": reasons, "stages": ["verification"]}
 
     async def report(state: InvestigationState) -> dict[str, Any]:
         # T7 replaces this with the report builder and its citation gate.

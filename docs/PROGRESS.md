@@ -21,10 +21,36 @@ tests use only those two.
 | T1 LLM provider | **done** (2026-11-23): `anthropic==2.6.0` added to `pyproject.toml` + `uv.lock` (uv reached PyPI this session); `uv sync --locked` OK; ruff/format/mypy clean (187 files), **453 passed**. |
 | T2 Evidence store + tools | **done** (2026-11-23): see T2 notes. Ruff/mypy clean (204 files), backend **480 passed**. |
 | T3 Graph skeleton + checkpoints | **done** (2026-11-23): see T3 notes. Ruff/mypy clean (217 files), backend **499 passed**. Compose wiring (migrate → checkpoint setup, `investigation-worker`) is **pending-live**: validated with `docker compose config` only. |
-| T4–T8 | not started (all buildable with unit/integration tests + FakeProvider) |
+| T4 Hypotheses + verification | **done** (2026-11-23): see T4 notes. Ruff/mypy clean (221 files), backend **517 passed**. |
+| T5–T8 | not started (all buildable with unit/integration tests + FakeProvider) |
 | T9 Workspace UI | not started; UI code + Vitest buildable now; Playwright e2e is **pending-live** (needs the compose stack) |
 | T10 Live acceptance | **pending-live** (also needs `ANTHROPIC_API_KEY`, D1) |
 | T11 Docs + report | not started |
+
+### T4 notes (2026-11-23)
+- Migration `0012`: `hypotheses` (status/rank/primary set only by verification; one primary per
+  investigation; primary never `inconclusive`; `model_confidence` display-only),
+  `hypothesis_evidence` (composite FK to `evidence (org_id, investigation_id, id)`: a dangling or
+  cross-investigation citation is impossible in the DB), `verification_checks` (result, detail,
+  evidence ids looked at). Each has a `TenantRepository`.
+- `app/investigation/verification.py`: pure, deterministic. Citation check (unknown ids dropped
+  and recorded) → the category's checks from the taxonomy, computed only from stored evidence →
+  status: `confirmed` only if every applicable check passes and no valid contradicting evidence
+  is cited; `probable` if ≥ 1 passes; else `inconclusive`. Ranking: status, checks passed,
+  supporting count, then proposed order. Confidence is not an input to `verify()` or `rank()`.
+- The graph's verification node persists hypotheses, citations and checks (a re-run replaces
+  them); T3's `verification_not_run` placeholder is gone. Runs still end `incomplete` because of
+  `report_not_generated` (T7).
+- Limitations, stated rather than guessed: `memory_or_resource_leak` needs per-point series slope,
+  which metric evidence does not keep, so it is never confirmed in Phase 4 (`not_run`); thresholds
+  (error rise ≥ 5 pp, p95 rise ≥ 50 %, traffic drop ≤ −50 %, deploy ≤ 30 min before onset) are
+  generic constants, not tuned on any scenario; checks use stored evidence only (no extra queries).
+- Tests: 13 unit (all checks pass → confirmed; contradiction → probable; reversed onset → not
+  confirmed; citations with no passing check → inconclusive; unknown ids rejected; `other` and
+  leak never confirmed; deployment cases; ranking deterministic under shuffling and independent of
+  confidence; every taxonomy check implemented) + 5 integration (end-to-end `confirmed` on stored
+  evidence, ranked above a confidence-1.0 vague hypothesis; contradiction → probable; FK rejects
+  dangling and cross-investigation citations; verification re-run replaces rows; tenant scoping).
 
 ### T3 notes (2026-11-23)
 - Dependencies (plan §11, exact pins): `langgraph==1.2.20`, `langgraph-checkpoint-postgres==3.2.0`,

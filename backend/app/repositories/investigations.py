@@ -4,13 +4,21 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import timedelta
 from typing import Any
 
-from sqlalchemy import ColumnElement, func, update
+from sqlalchemy import ColumnElement, delete, func, update
 from sqlalchemy.dialects.postgresql import insert
 
-from app.models.investigation import ACTIVE_STATUSES, Evidence, Investigation
+from app.models.investigation import (
+    ACTIVE_STATUSES,
+    Evidence,
+    Hypothesis,
+    HypothesisEvidence,
+    Investigation,
+    VerificationCheck,
+)
 from app.repositories.base import TenantRepository
 
 
@@ -174,3 +182,126 @@ class EvidenceRepository(TenantRepository[Evidence]):
         if service_id is not None:
             where.append(Evidence.service_ids.contains([str(service_id)]))
         return await self.list_page(limit=limit, cursor=cursor, where=where)
+
+
+@dataclass(frozen=True, slots=True)
+class HypothesisWrite:
+    proposed_rank: int
+    rank: int
+    is_primary: bool
+    category: str
+    subject_service_ids: list[str]
+    statement: str
+    status: str
+    status_reason: str
+    checks_passed: int
+    checks_applicable: int
+    model_confidence: float
+    rejected_citations: list[str]
+    missing_evidence: list[str]
+    supporting: list[str]
+    contradicting: list[str]
+    checks: Sequence[tuple[str, str, str, list[str]]]  # (name, result, detail, evidence ids)
+
+
+class HypothesisRepository(TenantRepository[Hypothesis]):
+    model = Hypothesis
+
+    async def replace_for_investigation(
+        self, investigation_id: uuid.UUID, items: Sequence[HypothesisWrite]
+    ) -> list[Hypothesis]:
+        """Delete this investigation's hypotheses (cascading citations and checks) and write the
+        new set, in the caller's transaction: a re-run of verification replaces, never adds."""
+        await self.session.execute(
+            delete(Hypothesis).where(
+                Hypothesis.org_id == self.ctx.org_id,
+                Hypothesis.investigation_id == investigation_id,
+            )
+        )
+        out: list[Hypothesis] = []
+        for it in items:
+            h = Hypothesis(
+                org_id=self.ctx.org_id,
+                investigation_id=investigation_id,
+                proposed_rank=it.proposed_rank,
+                rank=it.rank,
+                is_primary=it.is_primary,
+                category=it.category,
+                subject_service_ids=it.subject_service_ids,
+                statement=it.statement,
+                status=it.status,
+                status_reason=it.status_reason[:200],
+                checks_passed=it.checks_passed,
+                checks_applicable=it.checks_applicable,
+                model_confidence=it.model_confidence,
+                rejected_citations=it.rejected_citations,
+                missing_evidence=it.missing_evidence,
+            )
+            self.session.add(h)
+            await self.session.flush()
+            for role, ids in (("supporting", it.supporting), ("contradicting", it.contradicting)):
+                for ev in dict.fromkeys(ids):
+                    self.session.add(
+                        HypothesisEvidence(
+                            org_id=self.ctx.org_id,
+                            investigation_id=investigation_id,
+                            hypothesis_id=h.id,
+                            evidence_id=ev,
+                            role=role,
+                        )
+                    )
+            for name, result, detail, ids in it.checks:
+                self.session.add(
+                    VerificationCheck(
+                        org_id=self.ctx.org_id,
+                        hypothesis_id=h.id,
+                        name=name,
+                        result=result,
+                        detail=detail[:500],
+                        evidence_ids=list(ids),
+                    )
+                )
+            out.append(h)
+        await self.session.flush()
+        return out
+
+    async def for_investigation(self, investigation_id: uuid.UUID) -> list[Hypothesis]:
+        stmt = (
+            self.scoped()
+            .where(Hypothesis.investigation_id == investigation_id)
+            .order_by(Hypothesis.rank, Hypothesis.id)
+        )
+        return list((await self.session.scalars(stmt)).all())
+
+
+class HypothesisEvidenceRepository(TenantRepository[HypothesisEvidence]):
+    model = HypothesisEvidence
+    id_column = "hypothesis_id"
+
+    async def for_hypotheses(self, ids: Sequence[uuid.UUID]) -> list[HypothesisEvidence]:
+        if not ids:
+            return []
+        stmt = (
+            self.scoped()
+            .where(HypothesisEvidence.hypothesis_id.in_(list(ids)))
+            .order_by(
+                HypothesisEvidence.hypothesis_id,
+                HypothesisEvidence.role,
+                HypothesisEvidence.evidence_id,
+            )
+        )
+        return list((await self.session.scalars(stmt)).all())
+
+
+class VerificationCheckRepository(TenantRepository[VerificationCheck]):
+    model = VerificationCheck
+
+    async def for_hypotheses(self, ids: Sequence[uuid.UUID]) -> list[VerificationCheck]:
+        if not ids:
+            return []
+        stmt = (
+            self.scoped()
+            .where(VerificationCheck.hypothesis_id.in_(list(ids)))
+            .order_by(VerificationCheck.hypothesis_id, VerificationCheck.id)
+        )
+        return list((await self.session.scalars(stmt)).all())

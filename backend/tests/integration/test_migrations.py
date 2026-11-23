@@ -40,6 +40,9 @@ EXPECTED_TABLES = {
     "llm_calls",
     "investigations",
     "evidence",
+    "hypotheses",
+    "hypothesis_evidence",
+    "verification_checks",
 }
 
 

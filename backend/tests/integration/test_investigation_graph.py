@@ -160,8 +160,9 @@ async def test_end_to_end_with_fake_provider(
     provider = scripted()
     out = await run(sessionmaker, gw, checkpointer, provider)
 
-    assert out.status == "incomplete"  # verification/report arrive in T4/T7: never "completed"
-    assert {"verification_not_run", "report_not_generated"} <= set(out.reasons)
+    assert out.status == "incomplete"  # the report arrives in T7: never "completed" before
+    assert "report_not_generated" in out.reasons
+    assert "verification_not_run" not in out.reasons
     assert out.resumed is False
     state = out.state
     assert state["stages"][0] == "planner"
@@ -186,7 +187,8 @@ async def test_end_to_end_with_fake_provider(
     ]
     assert set(h1["supporting_evidence_ids"]) <= stored
     assert h1["rejected_citations"] == [FAKE_ID]
-    assert "status" not in h1  # only Verification sets status (T4)
+    assert h1["status"] in {"confirmed", "probable", "inconclusive"}  # set by verification
+    assert h1["rank"] == 1
 
     # Evidence: planner 3 + telemetry 3 per focus service + deploys + dependency 2.
     kinds = Counter(r["kind"] for r in await evidence_rows(sessionmaker, gw["inv"]))

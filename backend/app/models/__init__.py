@@ -9,7 +9,13 @@ from app.models.detection import (
 )
 from app.models.graph import EdgeSource, ServiceEdge
 from app.models.incident import Incident, IncidentDetection, IncidentEvent, IncidentService
-from app.models.investigation import Evidence, Investigation
+from app.models.investigation import (
+    Evidence,
+    Hypothesis,
+    HypothesisEvidence,
+    Investigation,
+    VerificationCheck,
+)
 from app.models.llm_call import LLMCall
 from app.models.organization import Organization, OrganizationMember, Role
 from app.models.project import Project
@@ -34,6 +40,8 @@ __all__ = [
     "EdgeSource",
     "Evidence",
     "HealthStatus",
+    "Hypothesis",
+    "HypothesisEvidence",
     "Incident",
     "IncidentDetection",
     "IncidentEvent",
@@ -58,4 +66,5 @@ __all__ = [
     "ServiceWindowStats",
     "Span",
     "User",
+    "VerificationCheck",
 ]
