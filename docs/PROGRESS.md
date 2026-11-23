@@ -11,12 +11,16 @@ Session constraint from 2026-11-20 (Codespace hours nearly used up): no testbed 
 started; only work that unit tests + the FakeProvider can verify. **pending-live** = needs the live
 testbed and is deferred until hours are available.
 
+2026-11-23: on Codespace resume both compose stacks auto-started (restart policies); with your OK
+all containers except `sentinelai-postgres-1` and `sentinelai-redis-1` were stopped. Integration
+tests use only those two.
+
 | Task | Status |
 |---|---|
-| T0 S2–S5 detection check | **pending-live**. S2 run `20261120T101344Z-5c6f9c`: detected, but split into 2 incidents (Phase 3 correlation gap, `docs/evidence/phase-4/t0-slow-sql-*`), reported per R1, awaiting your decision. S3–S5 not run. |
-| T1 LLM provider | code + tests green locally; **blocked on `uv.lock`**: `anthropic==2.6.0` is not yet in `pyproject.toml`/`uv.lock` because uv's TLS handshakes to PyPI time out from this Codespace (curl/Python reach it). Verified with the SDK installed into the local venv by pip. CI (`uv sync --locked`) will fail until the lock is updated. |
+| T0 S2–S5 detection check | **pending-live** (S3–S5 need the live testbed). S2 run `20261120T101344Z-5c6f9c`: detected, but split into 2 incidents (Phase 3 correlation gap, `docs/evidence/phase-4/t0-slow-sql-*`), reported per R1, awaiting your decision. S3–S5 not run. |
+| T1 LLM provider | **done** (2026-11-23): `anthropic==2.6.0` added to `pyproject.toml` + `uv.lock` (uv reached PyPI this session); `uv sync --locked` OK; ruff/format/mypy clean (187 files), **453 passed**. |
 | T2–T8 | not started (all buildable with unit/integration tests + FakeProvider) |
-| T9 Workspace UI | not started; its Playwright e2e is **pending-live** (needs the compose stack) |
+| T9 Workspace UI | not started; UI code + Vitest buildable now; Playwright e2e is **pending-live** (needs the compose stack) |
 | T10 Live acceptance | **pending-live** (also needs `ANTHROPIC_API_KEY`, D1) |
 | T11 Docs + report | not started |
 
